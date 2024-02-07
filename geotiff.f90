@@ -1,4 +1,4 @@
-odule GeoTIFF
+module GeoTIFF
   implicit none
   !save
   !private
