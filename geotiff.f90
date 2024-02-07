@@ -1,4 +1,4 @@
-module GeoTIFF
+odule GeoTIFF
   implicit none
   !save
   !private
@@ -6,7 +6,42 @@ module GeoTIFF
   !public TIFF_Close
   !public TIFF_GET_FIELD
   !public TIFF_FILE!,TIFF_IFD,TIFF_TAG
-  !INCLUDE 'table.ext'
+  interface TIFF_GET_FIELD
+          module procedure get_field_single_int, get_field_array_int, get_field_single_float, & 
+          get_field_array_float,get_field_array_char
+  end interface TIFF_GET_FIELD
+
+  !List of supported TAGs (and it's TagID)
+  integer :: TIFF_ImageWidth      =256
+  integer :: TIFF_ImageLength     =257
+  integer :: TIFF_BitsPerSample   =258
+  integer :: TIFF_Compression     =259
+  integer :: TIFF_PhotometricInt  =262
+  integer :: TIFF_Threshholding   =263
+  integer :: TIFF_CellWidth       =264
+  integer :: TIFF_CellLength      =265
+  integer :: TIFF_FillOrder       =266
+  integer :: TIFF_ImageDescription=270
+  integer :: TIFF_StripOffsets    =273
+  integer :: TIFF_Orientation     =274
+  integer :: TIFF_SamplesPerPixe  =277
+  integer :: TIFF_RowsPerStrip    =278
+  integer :: TIFF_StripByteCount  =279
+  integer :: TIFF_MinSampleValue  =280
+  integer :: TIFF_MaxSampleValue  =281
+  integer :: TIFF_XResolution     =282
+  integer :: TIFF_YResolution     =283
+  integer :: TIFF_PlanarConfigur  =284
+  integer :: TIFF_FreeOffsets     =288
+  integer :: TIFF_FreeByteCounts  =289
+  integer :: TIFF_GrayResponseUn  =290
+  integer :: TIFF_GrayResponseCu  =291
+  integer :: TIFF_ResolutionUnit  =296
+  integer :: TIFF_Software        =305
+  integer :: TIFF_DateTime        =306
+  integer :: TIFF_HostComputer    =316
+  integer :: TIFF_ColorMap        =320
+  integer :: TIFF_ExtraSamples    =338
 
   character (len=9) :: typeName(12)
   integer           :: typeSize(12)
@@ -172,80 +207,181 @@ subroutine TIFF_read_IFDs(tiff)
 
 end subroutine
 
+
+
+
+
+!=== TIFF_GET_FIELD  ====================
+
+subroutine get_field_single_int(tiff,tagId,val)
+   implicit none
+   type(TIFF_FILE), intent(in)     :: tiff
+   integer        , intent(in)     :: tagId
+   integer        , intent(inout)  :: val
+   integer                         :: tmp_arr(1)
+   print*,"get_field_single_int.."
+   tmp_arr(1)= val
+   call get_field_array_int(tiff,tagId,tmp_arr)
+   val=tmp_arr(1)
+end subroutine
+subroutine get_field_single_float(tiff,tagId,val)
+   implicit none
+   type(TIFF_FILE), intent(in)     :: tiff
+   integer        , intent(in)     :: tagId
+   real           , intent(inout)  :: val
+   real                            :: tmp_arr(1)
+   print*,"get_field_single_float.."
+   tmp_arr(1)= val
+   call get_field_array_float(tiff,tagId,tmp_arr)
+   val=tmp_arr(1)
+end subroutine
+
+subroutine get_field_array_int(tiff,tagId,values)  !for INTEGERs
+   implicit none
+   type(TIFF_FILE), intent(in)     :: tiff
+   integer        , intent(in)     :: tagId
+   integer        , intent(inout)  :: values(:)
+   integer :: off,siz,cnt
+   logical :: found=.false.
+   integer(kind=1), allocatable    :: values_1(:)
+   integer :: c
+
+   print*,"get_field_array_int..",tagId
+   call tiff_get_tag_parameters(tiff,tagId,siz,cnt,off,found)
+   if (found) then
+      if ( cnt * siz  <= 4 ) then  !if value size (cnt*size) <= 4-bytes, then offset is the value
+         values=off
+      else
+         allocate(values_1(siz*cnt))
+         call tiff_get_field_as_1byte_array(tiff,off,values_1) !,siz,cnt
+         do c=1,cnt
+            values(c)=transfer(values_1(1+(c-1)*siz:c*siz), values(c))
+         enddo 
+         deallocate(values_1)
+      endif
+   else
+      print '("Error: TagId not found:",I5)',tagId
+   endif
+end subroutine
+
+subroutine get_field_array_float(tiff,tagId,values)  !for REAL (float)
+   implicit none
+   type(TIFF_FILE), intent(in)     :: tiff
+   integer        , intent(in)     :: tagId
+   real           , intent(inout)  :: values(:)
+   integer :: off,siz,cnt
+   logical :: found=.false.
+   integer(kind=1), allocatable    :: values_1(:)
+   integer :: c
+
+   print*,"get_field_array_float..",tagId
+   call tiff_get_tag_parameters(tiff,tagId,siz,cnt,off,found)
+   if (found) then
+      if ( cnt * siz  <= 4 ) then  !if value size (cnt*size) <= 4-bytes, then offset is the value
+         values=real(off)
+      else
+         print*,"siz,cnt:",siz,cnt
+         allocate(values_1(siz*cnt))
+         call tiff_get_field_as_1byte_array(tiff,off,values_1) !,siz,cnt
+         print*,"values_1:",values_1
+         do c=1,cnt
+            values(c)=transfer(values_1(1+(c-1)*siz:c*siz), values(c))
+            print*,"aver: ",values_1(1+(c-1)*siz:c*siz)
+         enddo 
+         deallocate(values_1)
+      endif
+   else
+      print '("Error: TagId not found:",I5)',tagId
+   endif
+end subroutine
+
+subroutine get_field_array_char(tiff,tagId,values)  !for REAL (float)
+   implicit none
+   type(TIFF_FILE), intent(in)     :: tiff
+   integer        , intent(in)     :: tagId
+   character(*)   , intent(inout)  :: values
+   integer :: off,siz,cnt
+   logical :: found=.false.
+   integer(kind=1), allocatable    :: values_1(:)
+   integer :: c
+
+   print*,"get_field_array_char..",tagId
+   call tiff_get_tag_parameters(tiff,tagId,siz,cnt,off,found)
+   if (found) then
+      if ( cnt * siz  <= 4 ) then  !if value size (cnt*size) <= 4-bytes, then offset is the value
+         values=char(off)
+      else
+         print*,"siz,cnt:",siz,cnt
+         allocate(values_1(siz*cnt))
+         call tiff_get_field_as_1byte_array(tiff,off,values_1) !,siz,cnt
+         print*,"values_1:",values_1
+         do c=1,cnt
+            values(c:c)=transfer(values_1(1+(c-1)*siz:c*siz), values(c:c))
+            print*,"aver: ",values_1(1+(c-1)*siz:c*siz)
+         enddo 
+         deallocate(values_1)
+      endif
+   else
+      print '("Error: TagId not found:",I5)',tagId
+   endif
+end subroutine
+
+
+subroutine tiff_get_tag_parameters(tiff,tagId,siz,cnt,off,found)
+   implicit none
+   type(TIFF_FILE),intent(in)    :: tiff
+   integer        ,intent(in)    :: tagId
+   integer        ,intent(inout) :: off,siz,cnt !offset,count,size
+   logical        ,intent(inout) :: found!=.false.
+   integer  :: i,t         !loop indices
+
+   print*,"tiff_get_tag_parameters.."
+   !search idTag:
+   do i=1,tiff%n_imgs
+      do t=1,tiff%IFD(i)%n_tags
+          if ( tiff%IFD(i)%tag(t)%Id == tagId ) then
+
+             off=tiff%IFD(i)%tag(t)%offset
+             siz=typeSize(tiff%IFD(i)%tag(t)%typ)
+             cnt=tiff%IFD(i)%tag(t)%cnt
+
+             found=.true.
+             return
+          endif
+      enddo
+   enddo
+   if (.not. found) print '("Error: TagId not found:",I5)',tagId
+
+end subroutine
+
+
+subroutine tiff_get_field_as_1byte_array(tiff,offset,values_1)!,siz,cnt
+  implicit none
+  type(TIFF_FILE),intent(in)     :: tiff
+  integer        ,intent(in)     :: offset
+  integer(kind=1),intent(inout)  :: values_1(:) !1-byte elements array
+  integer :: i
+
+   print*,"tiff_get_field_as_1byte_array, size:",size(values_1)
+  do i=1,size(values_1)
+        read(unit=tiff%iUnit, rec=offset+i-1 ) values_1(i)
+  enddo
+end subroutine
+!=== END TIFF_GET_FIELD =============
+
+
+
+
 !subroutine GeoTIFF_read_GeoDir()
 !
 !endsubroutine
-
-
-!subroutine TIFF_GET_FIELD(tiff,tagId) !values)
-!   implicit none
-!   type(TIFF_FILE),intent(in) :: tiff
-!   integer        ,intent(in) :: tagId
-!   integer         :: i,t,c,s     !loop indices
-!   logical         :: found=.false.
-!   integer         :: siz,cnt,off !size,count,offset
-!
-!   integer,         allocatable   :: values(:) !hole array value "cnt"-elements long
-!   integer(kind=1), allocatable   ::  val_1(:) !unitary value    "siz"-bytes    long
-!
-!   !search idTag:
-!   do i=1,tiff%n_imgs
-!      do t=1,tiff%IFD(i)%n_tags
-!          if ( tiff%IFD(i)%tag(t)%Id == tagId ) then
-!
-!               off=tiff%IFD(i)%tag(t)%offset
-!               siz=typeSize(tiff%IFD(i)%tag(t)%typ)
-!               cnt=tiff%IFD(i)%tag(t)%cnt
-!
-!               allocate(values(cnt))
-!               allocate( val_1(siz))
-!
-!               if ( cnt * siz  <= 4 ) then  !if value size (cnt*size) <= 4-bytes, then offset is the value
-!                  values= off
-!               else
-!                    do c=1,cnt
-!                       do s=1,siz
-!                         read(unit=tiff%iUnit, rec=off+(c-1)*siz+s ) val_1(s)
-!                         !print*,val(s)
-!                       end do
-!                       values(c)=transfer(val_1,values(c))
-!                    end do
-!               endif
-!               print*,values
-!               found=.true.
-!               return
-!          endif
-!      enddo
-!   enddo
-!   if (.not. found) print '("Error: TagId not found:",I5)',tagId
-!
-!end subroutine
-
-!subroutine get_value(iUnit,off,siz,cnt,val)
-!    implicit none
-!    integer,intent(in) :: iUnit
-!    integer,intent(in) :: off,siz,cnt
-!    integer,intent(inout) :: val(:)
-!    integer, allocatable :: tmp(:)
-!    integer :: c,s
-!    allocate(tmp(siz))
-!    do c=1,cnt
-!       do s=1,siz
-!         print*,off,c,s,off+c*s
-!         read(unit=iUnit, rec=off+c*s-1 ) tmp(s)
-!       end do
-!       val(c) = transfer(tmp(:),val(c))
-!    end do
-!
-!end subroutine
-
 
 function tagName(tagId)
   implicit none
   integer,intent(in) :: tagId
   character(len=20)  :: tagName
   select case (tagId)
-     case (256 )  ;tagName='ImageWidth       '    
+     case (256 )  ;tagName='ImageWidth       '
      case (257 )  ;tagName='ImageLength      '
      case (258 )  ;tagName='BitsPerSample    '
      case (259 )  ;tagName='Compression      '
