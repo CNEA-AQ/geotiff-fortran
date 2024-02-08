@@ -5,43 +5,50 @@ module GeoTIFF
   !public TIFF_Open
   !public TIFF_Close
   !public TIFF_GET_FIELD
-  !public TIFF_FILE!,TIFF_IFD,TIFF_TAG
+  !public TIFF_FILE,TIFF_IFD,TIFF_TAG
+
   interface TIFF_GET_FIELD
           module procedure get_field_single_int, get_field_array_int, get_field_single_float, & 
           get_field_array_float,get_field_array_char
   end interface TIFF_GET_FIELD
 
-  !List of supported TAGs (and it's TagID)
-  integer :: TIFF_ImageWidth      =256
-  integer :: TIFF_ImageLength     =257
-  integer :: TIFF_BitsPerSample   =258
-  integer :: TIFF_Compression     =259
-  integer :: TIFF_PhotometricInt  =262
-  integer :: TIFF_Threshholding   =263
-  integer :: TIFF_CellWidth       =264
-  integer :: TIFF_CellLength      =265
-  integer :: TIFF_FillOrder       =266
-  integer :: TIFF_ImageDescription=270
-  integer :: TIFF_StripOffsets    =273
-  integer :: TIFF_Orientation     =274
-  integer :: TIFF_SamplesPerPixe  =277
-  integer :: TIFF_RowsPerStrip    =278
-  integer :: TIFF_StripByteCount  =279
-  integer :: TIFF_MinSampleValue  =280
-  integer :: TIFF_MaxSampleValue  =281
-  integer :: TIFF_XResolution     =282
-  integer :: TIFF_YResolution     =283
-  integer :: TIFF_PlanarConfigur  =284
-  integer :: TIFF_FreeOffsets     =288
-  integer :: TIFF_FreeByteCounts  =289
-  integer :: TIFF_GrayResponseUn  =290
-  integer :: TIFF_GrayResponseCu  =291
-  integer :: TIFF_ResolutionUnit  =296
-  integer :: TIFF_Software        =305
-  integer :: TIFF_DateTime        =306
-  integer :: TIFF_HostComputer    =316
-  integer :: TIFF_ColorMap        =320
-  integer :: TIFF_ExtraSamples    =338
+  !List of supported TIFF Tags (and it's TagID)
+  integer :: TIFF_ImageWidth         =256
+  integer :: TIFF_ImageLength        =257
+  integer :: TIFF_BitsPerSample      =258
+  integer :: TIFF_Compression        =259
+  integer :: TIFF_PhotometricInt     =262
+  integer :: TIFF_Threshholding      =263
+  integer :: TIFF_CellWidth          =264
+  integer :: TIFF_CellLength         =265
+  integer :: TIFF_FillOrder          =266
+  integer :: TIFF_ImageDescription   =270
+  integer :: TIFF_StripOffsets       =273
+  integer :: TIFF_Orientation        =274
+  integer :: TIFF_SamplesPerPixel    =277
+  integer :: TIFF_RowsPerStrip       =278
+  integer :: TIFF_StripByteCounts    =279
+  integer :: TIFF_MinSampleValue     =280
+  integer :: TIFF_MaxSampleValue     =281
+  integer :: TIFF_XResolution        =282
+  integer :: TIFF_YResolution        =283
+  integer :: TIFF_PlanarConfiguration=284
+  integer :: TIFF_FreeOffsets        =288
+  integer :: TIFF_FreeByteCounts     =289
+  integer :: TIFF_GrayResponseUn     =290
+  integer :: TIFF_GrayResponseCu     =291
+  integer :: TIFF_ResolutionUnit     =296
+  integer :: TIFF_Software           =305
+  integer :: TIFF_DateTime           =306
+  integer :: TIFF_HostComputer       =316
+  integer :: TIFF_ColorMap           =320
+  integer :: TIFF_TileWidth          =322 
+  integer :: TIFF_TileLength         =323 
+  integer :: TIFF_TileOffsets        =324 
+  integer :: TIFF_TileByteCounts     =325 
+  integer :: TIFF_ExtraSamples       =338
+  integer :: TIFF_SampleFormat       =339 
+
 
   character (len=9) :: typeName(12)
   integer           :: typeSize(12)
@@ -62,48 +69,82 @@ module GeoTIFF
       integer         :: Id,Typ,Cnt,Offset  !12-bytes (2,2,4,4) tag
   end type  
 
-  type TIFF_IFD !Image File Directory
-     integer            :: n_tags
-     type(TIFF_TAG)     :: tag(20)
-     integer            :: offset
-     !type(TIFF_TAG), allocatable :: tag(:) !tag(50)
+  type TIFF_IFD                     !Image File Directory
+     integer            :: n_tags   ! # of Tags in this IFD            !2-bytes
+     type(TIFF_TAG)     :: tag(20)  ! [tagId tagTyp tagCnt tagOffset]  !12-bytes [2,2,4,4]
+     integer            :: offset   ! next IFD offset or 0 (end IFD)   !4-bytes
   end type
   
-  type TIFF_FILE
-    integer(kind=4)     :: iUnit             !id of file (for open and close commands)
-    character(50)       :: path              !path to file
+  type TIFF_FILE                      !Representation of TIFF file
+     integer(kind=4)    :: iUnit      ! id of file (for open and close commands)
+     character(50)      :: path       ! path to file
+                                      ! Header
+     character(len=2)   :: byteOrder  !  II/MM
+     integer            :: magic_num  !  42
+     integer            :: offset     !  offset (location from begining in bytes) of 1st IFD
+         
+     type (TIFF_IFD)    :: IFD(5)     ! Image File Directory (IFD) list
+     integer            :: n_tags, n_imgs !total number of tags, total number of ifds
+     !real              :: imgs(n_imgs,width,length) ! data itself
+     
+     !extra parameters:
+     logical            :: swapByte=.false.
+     integer            :: bitsPerSample,samplesPerPixel
 
-    character(len=2)    :: byteOrder         !header II/MM
-    integer             :: magic_num         !42
-    integer             :: offset            !offset (location from begining in bytes) of 1st IFD
-        
-    type (TIFF_IFD)     :: IFD(5)            !Image File Directory (IFD) list
-    integer             :: n_tags, n_imgs
-    !real               :: imgs(n_imgs,width,length) ! data itself
+     character(5)       :: ImgType                      !'strip' / 'tile'
+     integer  :: rowsPerStrip                            !if 'strip' vars:
+     integer  :: tileLength,tileWidth,tileByteCounts     !if 'tile ' vars:
   end type
 
 contains
 
-subroutine TIFF_Open(inpFile,iUnit,tiff,iost)
+subroutine TIFF_Open(iUnit,inpFile,action,tiff,iost)
    implicit none
    type(TIFF_FILE), intent(inout) :: tiff
    integer        , intent(inout) :: iost
    integer        , intent(in)    :: iUnit
    character(*)   , intent(in)    :: inpFile
+   character(1)   , intent(in)    :: action  !'r' or 'w'
 
    tiff%path=inpFile
    tiff%iUnit=iUnit
 
-   print'("Opening tiff file: ",A20)',inpFile
-   open(unit=tiff%iUnit, file=trim(tiff%path), form='UNFORMATTED', &
-        action='READ',status='OLD',access='DIRECT', recl=1,iostat=iost)
+   select case (action)
+     case ('r','R','read','READ','Read')
+        print'("Opening tiff file: ",A20)',inpFile
+        open(unit=tiff%iUnit, file=trim(tiff%path), form='UNFORMATTED', &
+             action='READ',status='OLD',access='DIRECT', recl=1,iostat=iost)
 
-   ![OK] Read header: (8-bytes long) 
-   call TIFF_read_Header(tiff)  
-   ![OK] Read all IFDs:
-   call TIFF_read_IFDs(tiff)
-   ![  ] Read GeoDir
-   !call GeoTIFF_read_GeoDir(tiff)
+        ![OK] Read header: (8-bytes long) 
+        call TIFF_read_Header(tiff)  
+        ![OK] Read all IFDs and them corresponding tags parameters
+        call TIFF_read_IFDs(tiff)
+        ![  ] Read GeoKeys from GeoDir
+        !call GeoTIFF_read_GeoDir(tiff)
+
+        call TIFF_GET_FIELD(tiff, TIFF_BitsPerSample  , tiff%bitsPerSample  )
+        call TIFF_GET_FIELD(tiff, TIFF_SamplesPerPixel, tiff%samplesPerPixel)
+
+        if ( gotTag(tiff, TIFF_TileOffsets ) ) then 
+           tiff%ImgType='tile'
+           call TIFF_GET_FIELD(tiff, TIFF_tileByteCounts , tiff%tileByteCounts  )
+           call TIFF_GET_FIELD(tiff, TIFF_tileWidth      , tiff%tileWidth       )
+           call TIFF_GET_FIELD(tiff, TIFF_TileLength     , tiff%TileLength      )
+
+        else if ( gotTag(tiff, TIFF_StripOffsets) ) then
+           tiff%ImgType='strip'
+           call TIFF_GET_FIELD(tiff, TIFF_rowsPerStrip   , tiff%rowsPerStrip   )
+
+        else
+
+        end if
+     case ('w','W','write','WRITE','Write')
+        
+         
+        
+     case default
+      
+   end select
 end subroutine
 
 subroutine TIFF_Close(tiff)
@@ -139,6 +180,7 @@ subroutine TIFF_read_Header(tiff)
      close(tiff%iUnit)
      open(unit=tiff%iUnit, file=trim(tiff%path),form='UNFORMATTED',       &
          action='READ',status='OLD',access='DIRECT', convert="SWAP",recl=1)
+     tiff%swapByte=.true.
    endif 
    !Check magic-number (TIFF format identifier)
    if ( tiff%magic_num /= 42 ) stop 'This is not a TIFF file..'
@@ -219,7 +261,6 @@ subroutine get_field_single_int(tiff,tagId,val)
    integer        , intent(in)     :: tagId
    integer        , intent(inout)  :: val
    integer                         :: tmp_arr(1)
-   print*,"get_field_single_int.."
    tmp_arr(1)= val
    call get_field_array_int(tiff,tagId,tmp_arr)
    val=tmp_arr(1)
@@ -230,7 +271,6 @@ subroutine get_field_single_float(tiff,tagId,val)
    integer        , intent(in)     :: tagId
    real           , intent(inout)  :: val
    real                            :: tmp_arr(1)
-   print*,"get_field_single_float.."
    tmp_arr(1)= val
    call get_field_array_float(tiff,tagId,tmp_arr)
    val=tmp_arr(1)
@@ -245,8 +285,6 @@ subroutine get_field_array_int(tiff,tagId,values)  !for INTEGERs
    logical :: found=.false.
    integer(kind=1), allocatable    :: values_1(:)
    integer :: c
-
-   print*,"get_field_array_int..",tagId
    call tiff_get_tag_parameters(tiff,tagId,siz,cnt,off,found)
    if (found) then
       if ( cnt * siz  <= 4 ) then  !if value size (cnt*size) <= 4-bytes, then offset is the value
@@ -259,8 +297,6 @@ subroutine get_field_array_int(tiff,tagId,values)  !for INTEGERs
          enddo 
          deallocate(values_1)
       endif
-   else
-      print '("Error: TagId not found:",I5)',tagId
    endif
 end subroutine
 
@@ -273,14 +309,12 @@ subroutine get_field_array_float(tiff,tagId,values)  !for REAL (float)
    logical :: found=.false.
    integer(kind=1), allocatable    :: values_1(:)
    integer :: c
-
-   print*,"get_field_array_float..",tagId
    call tiff_get_tag_parameters(tiff,tagId,siz,cnt,off,found)
    if (found) then
       if ( cnt * siz  <= 4 ) then  !if value size (cnt*size) <= 4-bytes, then offset is the value
          values=real(off)
       else
-         print*,"siz,cnt:",siz,cnt
+         !print*,"siz,cnt:",siz,cnt
          allocate(values_1(siz*cnt))
          call tiff_get_field_as_1byte_array(tiff,off,values_1) !,siz,cnt
          print*,"values_1:",values_1
@@ -290,8 +324,6 @@ subroutine get_field_array_float(tiff,tagId,values)  !for REAL (float)
          enddo 
          deallocate(values_1)
       endif
-   else
-      print '("Error: TagId not found:",I5)',tagId
    endif
 end subroutine
 
@@ -304,28 +336,20 @@ subroutine get_field_array_char(tiff,tagId,values)  !for REAL (float)
    logical :: found=.false.
    integer(kind=1), allocatable    :: values_1(:)
    integer :: c
-
-   print*,"get_field_array_char..",tagId
    call tiff_get_tag_parameters(tiff,tagId,siz,cnt,off,found)
    if (found) then
       if ( cnt * siz  <= 4 ) then  !if value size (cnt*size) <= 4-bytes, then offset is the value
          values=char(off)
       else
-         print*,"siz,cnt:",siz,cnt
          allocate(values_1(siz*cnt))
          call tiff_get_field_as_1byte_array(tiff,off,values_1) !,siz,cnt
-         print*,"values_1:",values_1
          do c=1,cnt
             values(c:c)=transfer(values_1(1+(c-1)*siz:c*siz), values(c:c))
-            print*,"aver: ",values_1(1+(c-1)*siz:c*siz)
          enddo 
          deallocate(values_1)
       endif
-   else
-      print '("Error: TagId not found:",I5)',tagId
    endif
 end subroutine
-
 
 subroutine tiff_get_tag_parameters(tiff,tagId,siz,cnt,off,found)
    implicit none
@@ -333,18 +357,14 @@ subroutine tiff_get_tag_parameters(tiff,tagId,siz,cnt,off,found)
    integer        ,intent(in)    :: tagId
    integer        ,intent(inout) :: off,siz,cnt !offset,count,size
    logical        ,intent(inout) :: found!=.false.
-   integer  :: i,t         !loop indices
+   integer :: i,t  !loop indices
 
-   print*,"tiff_get_tag_parameters.."
-   !search idTag:
    do i=1,tiff%n_imgs
       do t=1,tiff%IFD(i)%n_tags
           if ( tiff%IFD(i)%tag(t)%Id == tagId ) then
-
              off=tiff%IFD(i)%tag(t)%offset
              siz=typeSize(tiff%IFD(i)%tag(t)%typ)
              cnt=tiff%IFD(i)%tag(t)%cnt
-
              found=.true.
              return
           endif
@@ -354,21 +374,94 @@ subroutine tiff_get_tag_parameters(tiff,tagId,siz,cnt,off,found)
 
 end subroutine
 
-
 subroutine tiff_get_field_as_1byte_array(tiff,offset,values_1)!,siz,cnt
   implicit none
   type(TIFF_FILE),intent(in)     :: tiff
   integer        ,intent(in)     :: offset
   integer(kind=1),intent(inout)  :: values_1(:) !1-byte elements array
   integer :: i
-
-   print*,"tiff_get_field_as_1byte_array, size:",size(values_1)
+  !print*,"tiff_get_field_as_1byte_array, size:",size(values_1)
   do i=1,size(values_1)
         read(unit=tiff%iUnit, rec=offset+i-1 ) values_1(i)
   enddo
 end subroutine
 !=== END TIFF_GET_FIELD =============
 
+
+
+  !=== TIFF_GET_IMAGE     =============
+   subroutine TIFF_GET_IMAGE(tiff,img)
+      implicit none
+      type(TIFF_FILE)     :: tiff
+      real, intent(inout) :: img(:)
+  
+      integer :: i,j,k,e
+      integer(kind=1), allocatable :: value_1(:)
+      
+      !if strips:
+      integer, allocatable :: stripOffSets(:), stripsBitCounts(:)
+      integer              :: nstrips,rps,wid,len
+     
+      allocate(value_1(tiff%bitsPerSample))
+      
+      SELECT CASE(tiff%ImgType)
+       CASE("strip")
+           call TIFF_GET_FIELD(tiff, TIFF_ImageWidth     ,wid )
+           call TIFF_GET_FIELD(tiff, TIFF_ImageLength    ,len )
+           call TIFF_GET_FIELD(tiff, TIFF_RowsPerStrip   ,rps )
+           nstrips=floor(real(len+rps-1/rps))
+           allocate(StripOffsets   (nstrips))
+           allocate(StripsBitCounts(nstrips))
+           call TIFF_GET_FIELD(tiff, TIFF_StripOffsets   ,StripOffsets   )
+           call TIFF_GET_FIELD(tiff, TIFF_StripByteCounts,StripsBitCounts)
+  
+           do i=1,size(stripOffsets)
+              do j=1,stripsBitCounts(i),tiff%bitsPerSample
+
+                 do k=1,tiff%bitsPerSample                         
+                     read(tiff%iUnit, rec=stripOffsets(i)+j-1+k-1) value_1(k)
+                 enddo
+                 e=int(i+(j/tiff%bitsPerSample)) 
+                    
+                 img(e) = transfer( value_1, img(1))
+                 print*, e,img(e)
+              enddo
+           enddo
+   
+       CASE("tile")
+   
+   
+         !       END DO TColLoop ! tileWid, cols
+         !   END DO TRowLoop ! tileLen, rows
+         !END DO TOffsets ! tile offsets         
+   
+      END SELECT
+   
+   end subroutine TIFF_GET_IMAGE
+  !=== END TIFF_GET_IMAGE =============
+  
+
+!MISC Functions =====================
+logical function gotTag(tiff,tagId)
+ implicit none
+ type(TIFF_FILE), intent(in) ::tiff
+ integer        , intent(in) ::tagId
+ integer :: i,t
+ gotTag=.false.
+ do i=1,tiff%n_imgs
+    do t=1,tiff%IFD(i)%n_tags
+        if ( tiff%IFD(i)%tag(t)%Id == tagId ) then
+           gotTag=.true.
+           return
+        endif
+    enddo
+ enddo
+end function
+
+
+
+
+! END MISC Functions =================
 
 
 
@@ -385,17 +478,31 @@ function tagName(tagId)
      case (257 )  ;tagName='ImageLength      '
      case (258 )  ;tagName='BitsPerSample    '
      case (259 )  ;tagName='Compression      '
+     case (262 )  ;tagName='PhotometricInt   '
+     case (263 )  ;tagName='Threshholding    '
+     case (264 )  ;tagName='CellWidth        '
+     case (265 )  ;tagName='CellLength       '
+     case (266 )  ;tagName='FillOrder        '
+     case (270 )  ;tagName='ImageDescription '
+     case (271 )  ;tagName='Make             '
+     case (272 )  ;tagName='Model            '
      case (273 )  ;tagName='StripOffsets     '
      case (274 )  ;tagName='Orientation      '
      case (277 )  ;tagName='SamplesPerPixel  '
      case (278 )  ;tagName='RowsPerStrip     '
+     case (279 )  ;tagName='StripByteCounts  '
+     case (280 )  ;tagName='MinSampleValue   '
+     case (281 )  ;tagName='MaxSampleValue   '
+     case (282 )  ;tagName='XResolution      '
+     case (283 )  ;tagName='YResolution      '
+     case (284 )  ;tagName='PlanarConfig     ' !PlanarConfiguration
+     case (306 )  ;tagName='DateTime         '
      case (322 )  ;tagName='TileWidth        '
      case (323 )  ;tagName='TileLength       '
      case (324 )  ;tagName='TileOffsets      '
      case (339 )  ;tagName='SampleFormat     '
      case (3355)  ;tagName='ModelPixelScale  '
      case (3392)  ;tagName='ModelTiePoint    '
-     
      case (1024)  ;tagName='GTModelType      '
      case (1025)  ;tagName='GTRasterType     '
      case (2048)  ;tagName='GeographicType   '
@@ -412,7 +519,7 @@ function tagName(tagId)
      case (3083)  ;tagName='ProjFalseNorthing'
      case (3088)  ;tagName='ProjCenterLong   '
      case (3089)  ;tagName='ProjCenterLat    '
-     case default ;tagName='IdontKnow        '
+     case default ;tagName='Not Recognized   '
   end select
 end function
 
