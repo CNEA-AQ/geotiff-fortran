@@ -12,8 +12,8 @@ program test_tiff
   real,allocatable     :: image(:)
   !----------------------------------------
   !(1 PART) Read and extract data from TIFF:
-  !call TIFF_Open(trim(inp_file),124, my_tiff, ios) 
-   call TIFF_Open(124,"files/tire.tif",'r', my_tiff, ierr)
+   !call TIFF_Open(124,"files/tire.tif",'r', my_tiff, ierr)
+   call TIFF_Open(124,"files/test.tif",'r', my_tiff, ierr)
    if (ierr==0) then
 
        ![ ] TIFF_Get_FIELD(tiff   , tagId                , Value)
@@ -27,21 +27,19 @@ program test_tiff
        allocate(sbc(floor(real((len+rps-1)/rps) )))                              !esta mal wid/rps
        call TIFF_GET_FIELD(my_tiff, TIFF_StripOffsets    , sof  )
        call TIFF_GET_FIELD(my_tiff, TIFF_StripByteCounts , sbc  )
-       call TIFF_GET_FIELD(my_tiff, TIFF_ImageDescription, words)
+       !call TIFF_GET_FIELD(my_tiff, TIFF_ImageDescription, words)
 
        print*,"---"
        print '("wid:",i5,". len:",i5,". bps:",i3,". rps:",i5)',wid,len,bps,rps
-       print*,"sof:",sof
-       print*,"sbc:",sbc
+       print*,"sof:",sof(1:10)
+       print*,"sbc:",sbc(1:10)
        print*,"tif description:",words
        print*, "Tiff type: ",my_tiff%ImgType
-       print*, "Tiff type and params (strip):", my_tiff%rowsPerStrip
-       print*, "Tiff type and params (tile ):", my_tiff%tileLength,my_tiff%tileWidth,my_tiff%tileByteCounts
        print*,"---"
 
        ![ ] TIFF_GET_IMG_VALUES(tiff,   img(i,:,:))
-       allocate(image(wid*len))
-       call TIFF_GET_IMAGE(my_tiff,  image )
+       !allocate(image(wid*len))
+       !call TIFF_GET_IMAGE(my_tiff,  image )
 
        !GeoTIFF procedures:
        ![ ] GeoTIFF_get_PROJ(tiff, proj4string)
