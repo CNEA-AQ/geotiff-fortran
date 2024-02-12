@@ -321,10 +321,8 @@ subroutine get_field_array_float(tiff,tagId,values)  !for REAL (float)
       else
          allocate(values_1(siz*cnt))
          call get_field_as_byte_array(tiff,off,values_1) !,siz,cnt
-         print*,"values_1:",values_1
          do c=1,cnt
             values(c)=transfer(values_1(1+(c-1)*siz:c*siz), values(1))
-            print*,"aver: ",values_1(1+(c-1)*siz:c*siz)
          enddo 
          deallocate(values_1)
       endif
@@ -386,72 +384,12 @@ subroutine get_field_as_byte_array(tiff,offset,values_1)!,siz,cnt
   integer(kind=1),intent(inout)  :: values_1(:) !1-byte elements array
   integer :: i
   do i=1,size(values_1)
-        read(unit=tiff%iUnit, rec=offset+i-1 ) values_1(i)
+        read(unit=tiff%iUnit, rec=offset+1+i-1 ) values_1(i)
   enddo
 end subroutine
 !=== END TIFF_GET_FIELD =============
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  
+ 
 
 !MISC Functions =====================
 logical function gotTag(tiff,tagId)
@@ -575,28 +513,22 @@ end function
        CASE("strip")
            call TIFF_GET_FIELD(tiff, TIFF_RowsPerStrip   ,rps )
            nstrips=floor(real((len+rps-1)/rps))
-           !print*,"N-STRIPS:",nstrips
-           !print*,"rowsPerStrip",rps
            allocate(StripOffsets    (nstrips))
            allocate(StripsByteCounts(nstrips))
            call TIFF_GET_FIELD(tiff, TIFF_StripOffsets   ,StripOffsets   )
            call TIFF_GET_FIELD(tiff, TIFF_StripByteCounts,StripsByteCounts)
-           !thisrec = stripOffsets(i) + ((( (jrow-1)*wid) + tmpcol) * vars%bytesPerSample)
-
            e=0
            do i=1,size(stripOffsets)
-              print*,"stripOffset:",stripOffsets(i)
               do j=1,rps
                  do k=1,wid !StripsByteCounts(i),bytesPerSample
                     do b=1,bytesPerSample
-                        recNum=stripOffsets(i) + ( (j-1)*wid + (k-1) )*bytesPerSample + b
+                        recNum=stripOffsets(i)+1+( (j-1)*wid + (k-1) )*bytesPerSample + b
                         read(tiff%iUnit, rec=recNum) value_1(b)
                     enddo
                  if ( e >= wid*len ) cycle 
                  e=e+1
                  img(e)   = transfer( value_1, img(1)   )
-                 !img_i(e) = transfer( value_1, img_i(1) )
-                 print*, recNum,e,img(e)
+                 print*, recNum,e,int(img(e) )
                 enddo
               enddo
            enddo
