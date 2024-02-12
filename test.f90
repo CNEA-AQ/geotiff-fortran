@@ -1,7 +1,7 @@
 program test_tiff
 
   use GeoTIFF
-
+  use netcdf  !debug
   implicit none
   integer            :: ierr
   type(TIFF_file)    :: my_tiff
@@ -10,10 +10,15 @@ program test_tiff
   integer, allocatable :: sof(:),sbc(:)
   character(100)       :: words=''
   real,allocatable     :: image(:)
+
+  !netcdf
+  integer :: ncid,x_dim_id,y_dim_id,var_id
   !----------------------------------------
   !(1 PART) Read and extract data from TIFF:
    !call TIFF_Open(124,"files/tire.tif",'r', my_tiff, ierr)
-   call TIFF_Open(124,"files/test.tif",'r', my_tiff, ierr)
+   !call TIFF_Open(124,"files/at3_1m4_01.tif",'r', my_tiff, ierr)
+   !call TIFF_Open(124,"files/FAA_UTM18N_NAD83.tif",'r', my_tiff, ierr)  !multiband geoTiff
+   call TIFF_Open(124,"files/sinus.tif",'r', my_tiff, ierr)
    if (ierr==0) then
 
        ![ ] TIFF_Get_FIELD(tiff   , tagId                , Value)
@@ -33,20 +38,36 @@ program test_tiff
        print '("wid:",i5,". len:",i5,". bps:",i3,". rps:",i5)',wid,len,bps,rps
        print*,"sof:",sof(1:10)
        print*,"sbc:",sbc(1:10)
-       print*,"tif description:",words
+       !print*,"tif description:",words
        print*, "Tiff type: ",my_tiff%ImgType
        print*,"---"
 
        ![ ] TIFF_GET_IMG_VALUES(tiff,   img(i,:,:))
-       !allocate(image(wid*len))
-       !call TIFF_GET_IMAGE(my_tiff,  image )
+       allocate(image(wid*len))
+       call TIFF_GET_IMAGE(my_tiff,  image )
 
        !GeoTIFF procedures:
        ![ ] GeoTIFF_get_PROJ(tiff, proj4string)
        ![ ] GeoTIFF_get_GRID(tiff, nx,ny,dx,dy,xmin,xmax,ymin,ymax)
 
-
    call TIFF_Close(my_tiff)
+
+!DEBUG
+   !Crear NetCDF
+   call check(nf90_create('image.nc'    , NF90_CLOBBER, ncid))
+     !Defino dimensiones
+     call check(nf90_def_dim(ncid, "x"   , wid    , x_dim_id       ))
+     call check(nf90_def_dim(ncid, "y"   , len    , y_dim_id       ))
+     !Creo variables:
+     call check( nf90_def_var(ncid, 'image'           , NF90_FLOAT, [x_dim_id,y_dim_id], var_id)   )
+   call check(nf90_enddef(ncid))   !End NetCDF define mode
+
+   !Abro NetCDF y guardo variables de salida
+   call check(nf90_open('image.nc'    , nf90_write, ncid       ))
+       call check(nf90_inq_varid(ncid,'image'          ,var_id)); call check(nf90_put_var(ncid, var_id,transpose(reshape(image,[wid,len])) )) 
+   call check(nf90_close( ncid ))
+!DEBUG:
+
    else
       stop 'Failed to read TIFF file'
    endif
@@ -59,5 +80,11 @@ program test_tiff
    !call TIFF_Write_TIFF_FILE ('file_name.tif',tiff)
 
 
-
+contains
+subroutine check(status)            !netcdf error-check function
+  integer, intent(in) :: status
+  if (status /= nf90_noerr) then
+    write(*,*) nf90_strerror(status); stop 'netcdf error'
+  end if
+end subroutine check
 end program
