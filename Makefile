@@ -1,8 +1,8 @@
 .SUFFIXES: .o .f90
 
 FC  =gfortran
-LIBS= #-L/usr/lib/x86_64-linux-gnu -lnetcdf -lnetcdff -lm
-INC = #-I/usr/include
+LIBS= -L/usr/lib/x86_64-linux-gnu -lnetcdf -lnetcdff -lm
+INC = -I/usr/include
 
 FCFLAGS=-O1 -ffree-line-length-none #-Wunused #-Wall#
 LDFLAGS=-O1
