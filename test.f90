@@ -18,27 +18,28 @@ program test_tiff
    !call TIFF_Open(124,"files/tire.tif",'r', my_tiff, ierr)
    !call TIFF_Open(124,"files/at3_1m4_01.tif",'r', my_tiff, ierr)
    !call TIFF_Open(124,"files/FAA_UTM18N_NAD83.tif",'r', my_tiff, ierr)  !multiband geoTiff
-   call TIFF_Open(124,"files/sinus.tif",'r', my_tiff, ierr)
+   !call TIFF_Open(124,"files/sinus.tif",'r', my_tiff, ierr)
+   call TIFF_Open(124,"files/cea.tif",'r', my_tiff, ierr)
    if (ierr==0) then
 
        ![ ] TIFF_Get_FIELD(tiff   , tagId                , Value)
-       call TIFF_GET_FIELD(my_tiff, TIFF_ImageWidth      , wid  )
-       call TIFF_GET_FIELD(my_tiff, TIFF_ImageLength     , len  )
-       call TIFF_GET_FIELD(my_tiff, TIFF_BitsPerSample   , bps  )
+       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_ImageWidth      , wid  )
+       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_ImageLength     , len  )
+       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_BitsPerSample   , bps  )
 
-       call TIFF_GET_FIELD(my_tiff, TIFF_RowsPerStrip    , rps  )
+       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_RowsPerStrip    , rps  )
 
-       allocate(sof(floor(real((len+rps-1)/rps) )))                              !esta mal wid/rps
-       allocate(sbc(floor(real((len+rps-1)/rps) )))                              !esta mal wid/rps
-       call TIFF_GET_FIELD(my_tiff, TIFF_StripOffsets    , sof  )
-       call TIFF_GET_FIELD(my_tiff, TIFF_StripByteCounts , sbc  )
-       !call TIFF_GET_FIELD(my_tiff, TIFF_ImageDescription, words)
+       allocate(sof(floor(real((len+rps-1)/rps) )))        
+       allocate(sbc(floor(real((len+rps-1)/rps) )))        
+       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_StripOffsets    , sof  )
+       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_StripByteCounts , sbc  )
+       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_ImageDescription, words)
 
        print*,"---"
        print '("wid:",i5,". len:",i5,". bps:",i3,". rps:",i5)',wid,len,bps,rps
        print*,"sof:",sof(1:10)
        print*,"sbc:",sbc(1:10)
-       !print*,"tif description:",words
+       print*,"tif description:",words
        print*, "Tiff type: ",my_tiff%ImgType
        print*,"---"
 
@@ -47,24 +48,28 @@ program test_tiff
        call TIFF_GET_IMAGE(my_tiff,  image )
 
        !GeoTIFF procedures:
-       ![ ] GeoTIFF_get_PROJ(tiff, proj4string)
-       ![ ] GeoTIFF_get_GRID(tiff, nx,ny,dx,dy,xmin,xmax,ymin,ymax)
+       !call GTIFF_GET_KEY_VALUE()
+       !call GTIFF_GET_KEY_VALUE(tiff, GKey_ProjectedCSType, proj4string)
+       ![ ] GTIFF_get_PROJ(tiff, proj4string)
+       ![ ] GTIFF_get_GRID(tiff, nx,ny,dx,dy,xmin,xmax,ymin,ymax)
+       ![ ] GTIFF_get_XCOORD(tiff, lon )
+       ![ ] GTIFF_get_YCOORD(tiff, lat )
 
    call TIFF_Close(my_tiff)
 
 !DEBUG
    !Crear NetCDF
    call check(nf90_create('image.nc'    , NF90_CLOBBER, ncid))
-     !Defino dimensiones
-     call check(nf90_def_dim(ncid, "x"   , wid    , x_dim_id       ))
-     call check(nf90_def_dim(ncid, "y"   , len    , y_dim_id       ))
-     !Creo variables:
-     call check( nf90_def_var(ncid, 'image'           , NF90_FLOAT, [x_dim_id,y_dim_id], var_id)   )
+      !Defino dimensiones
+      call check(nf90_def_dim(ncid, "x"   , wid    , x_dim_id       ))
+      call check(nf90_def_dim(ncid, "y"   , len    , y_dim_id       ))
+      !Creo variables:
+      call check( nf90_def_var(ncid, 'image'           , NF90_FLOAT, [x_dim_id,y_dim_id], var_id)   )
    call check(nf90_enddef(ncid))   !End NetCDF define mode
 
    !Abro NetCDF y guardo variables de salida
    call check(nf90_open('image.nc'    , nf90_write, ncid       ))
-       call check(nf90_inq_varid(ncid,'image'          ,var_id)); call check(nf90_put_var(ncid, var_id,transpose(reshape(image,[wid,len])) )) 
+      call check(nf90_inq_varid(ncid,'image'          ,var_id)); call check(nf90_put_var(ncid, var_id,reshape(image,[wid,len]) )) 
    call check(nf90_close( ncid ))
 !DEBUG:
 

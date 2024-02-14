@@ -4,13 +4,13 @@ module GeoTIFF
   !private
   !public TIFF_Open
   !public TIFF_Close
-  !public TIFF_GET_FIELD
+  !public TIFF_GET_TAG_VALUE
   !public TIFF_FILE,TIFF_IFD,TIFF_TAG
 
-  interface TIFF_GET_FIELD
+  interface TIFF_GET_TAG_VALUE
           module procedure get_field_single_int, get_field_array_int, get_field_single_float, & 
           get_field_array_float,get_field_array_char
-  end interface TIFF_GET_FIELD
+  end interface TIFF_GET_TAG_VALUE
 
   !List of supported TIFF Tags (and it's TagID)
   integer :: TIFF_ImageWidth         =256
@@ -23,11 +23,11 @@ module GeoTIFF
   integer :: TIFF_CellLength         =265
   integer :: TIFF_FillOrder          =266
   integer :: TIFF_ImageDescription   =270
-  integer :: TIFF_StripOffsets       =273
-  integer :: TIFF_Orientation        =274
+  integer :: TIFF_StripOffsets       =273 !Strip Images
+  integer :: TIFF_Orientation        =274 !orientation - default value is 1 (0,0 = northwest corner)
   integer :: TIFF_SamplesPerPixel    =277
-  integer :: TIFF_RowsPerStrip       =278
-  integer :: TIFF_StripByteCounts    =279
+  integer :: TIFF_RowsPerStrip       =278 !Strip Images
+  integer :: TIFF_StripByteCounts    =279 !Strip Images
   integer :: TIFF_MinSampleValue     =280
   integer :: TIFF_MaxSampleValue     =281
   integer :: TIFF_XResolution        =282
@@ -42,12 +42,70 @@ module GeoTIFF
   integer :: TIFF_DateTime           =306
   integer :: TIFF_HostComputer       =316
   integer :: TIFF_ColorMap           =320
-  integer :: TIFF_TileWidth          =322 
-  integer :: TIFF_TileLength         =323 
-  integer :: TIFF_TileOffsets        =324 
-  integer :: TIFF_TileByteCounts     =325 
+  integer :: TIFF_TileWidth          =322  !Tiled Images  
+  integer :: TIFF_TileLength         =323  !Tiled Images
+  integer :: TIFF_TileOffsets        =324  !Tiled Images
+  integer :: TIFF_TileByteCounts     =325  !Tiled Images
   integer :: TIFF_ExtraSamples       =338
   integer :: TIFF_SampleFormat       =339 
+
+  integer :: GTIFF_GeoKeyDirectoryTag    = 34735 !(mandatory)
+  integer :: GTIFF_GeoDoubleParamsTag    = 34736 !(optional)
+  integer :: GTIFF_GeoAsciiParamsTag     = 34737 !(optional)
+  integer :: GTIFF_ModelPixelScaleTag    = 33550 !(optional)
+  integer :: GTIFF_ModelTiepointTag      = 33922 !(conditional)
+  integer :: GTIFF_ModelTransformationTag= 34264 !(conditional)
+  !The conditional tags shall follow the following rules:
+  !- One of ModelTiepointTag or ModelTransformationTag SHALL be included in an Image File Directory (IFD)
+  !- If the ModelTransformationTag is included in an IFD, then a ModelPixelScaleTag SHALL NOT be included
+  !- If the ModelPixelScaleTag is included in an IFD, then a ModelTiepointTag SHALL also be included.
+
+  integer :: GKey_GTModelType             =1024 
+  integer :: GKey_GTRasterType            =1025 
+  integer :: GKey_GTCitation              =1026 
+  integer :: GKey_GeographicType          =2048 
+  integer :: GKey_GeogCitation            =2049 
+  integer :: GKey_GeogGeodeticDatum       =2050 
+  integer :: GKey_GeogPrimeMeridian       =2051 
+  integer :: GKey_GeogLinearUnits         =2052 
+  integer :: GKey_GeogLinearUnitSize      =2053 
+  integer :: GKey_GeogAngularUnits        =2054 
+  integer :: GKey_GeogAngularUnitSize     =2055 
+  integer :: GKey_GeogEllipsoid           =2056 
+  integer :: GKey_GeogSemiMajorAxis       =2057 
+  integer :: GKey_GeogSemiMinorAxis       =2058 
+  integer :: GKey_GeogInvFlattening       =2059 
+  integer :: GKey_GeogAzimuthUnits        =2060 
+  integer :: GKey_GeogPrimeMeridianLong   =2061 
+  integer :: GKey_ProjectedCSType         =3072  !EPSG!
+  integer :: GKey_PCSCitation             =3073 
+  integer :: GKey_Projection              =3074 
+  integer :: GKey_ProjCoordTrans          =3075 
+  integer :: GKey_ProjLinearUnits         =3076 
+  integer :: GKey_ProjLinearUnitSize      =3077 
+  integer :: GKey_ProjStdParallel1        =3078 
+  integer :: GKey_ProjStdParallel2        =3079 
+  integer :: GKey_ProjNatOriginLong       =3080 
+  integer :: GKey_ProjNatOriginLat        =3081 
+  integer :: GKey_ProjFalseEasting        =3082 
+  integer :: GKey_ProjFalseNorthing       =3083 
+  integer :: GKey_ProjFalseOriginLong     =3084 
+  integer :: GKey_ProjFalseOriginLat      =3085 
+  integer :: GKey_ProjFalseOriginEasting  =3086 
+  integer :: GKey_ProjFalseOriginNorthing =3087 
+  integer :: GKey_ProjCenterLong          =3088 
+  integer :: GKey_ProjCenterLat           =3089 
+  integer :: GKey_ProjCenterEasting       =3090 
+  integer :: GKey_ProjCenterNorthing      =3091 
+  integer :: GKey_ProjScaleAtNatOrigin    =3092 
+  integer :: GKey_ProjScaleAtCenter       =3093 
+  integer :: GKey_ProjAzimuthAngle        =3094 
+  integer :: GKey_ProjStraightVertPoleLong=3095 
+  integer :: GKey_VerticalCSType          =4096 
+  integer :: GKey_VerticalCitation        =4097 
+  integer :: GKey_VerticalDatum           =4096 
+  integer :: GKey_VerticalUnits           =4099 
+
 
   character (len=9) :: typeName(12)
   integer           :: typeSize(12)
@@ -68,16 +126,24 @@ module GeoTIFF
   integer (kind=4), parameter :: intAdj2 = 65536         ! adjustment for 2-byte unsigned integers
   integer (kind=2), parameter :: intAdj1 = 256           ! adjustment for 1-byte unsigned integers
 
+  !GeoTIFF Dir and Keys:  --------------------
+  type Geo_KEY 
+      integer         :: Id,typ,Cnt,Offset  !
+  end type  
+  
+  type GEO_DIR
+      integer                    :: nKeys,version,revision,minor_revision
+      type(Geo_Key), allocatable :: Key(:)  
+  end type
+  !-------------------------------------------
   type TIFF_TAG
       integer         :: Id,Typ,Cnt,Offset  !12-bytes (2,2,4,4) tag
   end type  
-
   type TIFF_IFD                     !Image File Directory
      integer            :: n_tags   ! # of Tags in this IFD            !2-bytes
      type(TIFF_TAG)     :: tag(20)  ! [tagId tagTyp tagCnt tagOffset]  !12-bytes [2,2,4,4]
      integer            :: offset   ! next IFD offset or 0 (end IFD)   !4-bytes
   end type
-  
   type TIFF_FILE                      !Representation of TIFF file
      integer(kind=4)    :: iUnit      ! id of file (for open and close commands)
      character(50)      :: path       ! path to file
@@ -90,6 +156,7 @@ module GeoTIFF
      integer            :: n_tags, n_imgs !total number of tags, total number of ifds
      !real              :: imgs(n_imgs,width,length) ! data itself
      
+     type (GEO_DIR)     :: gDir
      !extra parameters:
      logical            :: swapByte=.false.
      integer            :: bitsPerSample,samplesPerPixel
@@ -120,16 +187,19 @@ subroutine TIFF_Open(iUnit,inpFile,action,tiff,iost)
         call TIFF_read_Header(tiff)  
         ![OK] Read all IFDs and them corresponding tags parameters
         call TIFF_read_IFDs(tiff)
+        
         ![  ] Read GeoKeys from GeoDir
-        !call GeoTIFF_read_GeoDir(tiff)
-
-        call TIFF_GET_FIELD(tiff, TIFF_BitsPerSample  , tiff%bitsPerSample  )
-        call TIFF_GET_FIELD(tiff, TIFF_SamplesPerPixel, tiff%samplesPerPixel)
+        if ( gotTag(tiff, GTIFF_GeoKeyDirectoryTag ) ) then 
+            print*," GeoTIFF file!"
+            call GTIFF_read_GeoDir(tiff)
+        endif
+        call TIFF_GET_TAG_VALUE(tiff, TIFF_BitsPerSample  , tiff%bitsPerSample  )
+        call TIFF_GET_TAG_VALUE(tiff, TIFF_SamplesPerPixel, tiff%samplesPerPixel)
 
         if ( gotTag(tiff, TIFF_TileOffsets ) ) then 
-           tiff%ImgType='tile'
+           print*, " Tiled type!"; tiff%ImgType='tile'
         else if ( gotTag(tiff, TIFF_StripOffsets) ) then
-           tiff%ImgType='strip'
+           print*, " Strip type!"; tiff%ImgType='strip'
         else
 
         end if
@@ -207,28 +277,23 @@ subroutine TIFF_read_IFDs(tiff)
      do t=1,IFD%n_tags
         read(unit=tiff%iUnit, rec=IFD%offset+2+(t-1)*12+1 ) int_1(3)  !TagId   (1)
         read(unit=tiff%iUnit, rec=IFD%offset+2+(t-1)*12+2 ) int_1(4)  !TagId   (2)
-
         read(unit=tiff%iUnit, rec=IFD%offset+2+(t-1)*12+3 ) int_1(5)  !TagType (1)
         read(unit=tiff%iUnit, rec=IFD%offset+2+(t-1)*12+4 ) int_1(6)  !TagType (2)
-
         read(unit=tiff%iUnit, rec=IFD%offset+2+(t-1)*12+5 ) int_1(7)  !Count   (1)
         read(unit=tiff%iUnit, rec=IFD%offset+2+(t-1)*12+6 ) int_1(8)  !Count   (2)
         read(unit=tiff%iUnit, rec=IFD%offset+2+(t-1)*12+7 ) int_1(9)  !Count   (3)
         read(unit=tiff%iUnit, rec=IFD%offset+2+(t-1)*12+8 ) int_1(10) !Count   (4)
-
         read(unit=tiff%iUnit, rec=IFD%offset+2+(t-1)*12+9 ) int_1(11) !Offset  (1)
         read(unit=tiff%iUnit, rec=IFD%offset+2+(t-1)*12+10) int_1(12) !Offset  (2)
         read(unit=tiff%iUnit, rec=IFD%offset+2+(t-1)*12+11) int_1(13) !Offset  (3)
         read(unit=tiff%iUnit, rec=IFD%offset+2+(t-1)*12+12) int_1(14) !Offset  (4)
-     
         IFD%tag(t)%Id     = transfer([int_1(3) ,int_1(4)]                      , IFD%tag(t)%Id    )
         IFD%tag(t)%Typ    = transfer([int_1(5) ,int_1(6)]                      , IFD%tag(t)%Typ   )
         IFD%tag(t)%Cnt    = transfer([int_1(7) ,int_1(8) ,int_1(9) , int_1(10)], IFD%tag(t)%Cnt   )
         IFD%tag(t)%Offset = transfer([int_1(11),int_1(12),int_1(13), int_1(14)], IFD%tag(t)%Offset)
         if ( IFD%tag(t)%Cnt    < 0 )  IFD%tag(t)%Cnt   =IFD%tag(t)%Cnt    +  intAdj4
         if ( IFD%tag(t)%Offset < 0 )  IFD%tag(t)%Offset=IFD%tag(t)%Offset +  intAdj4
-
-        print '("    Tag ",i2,":",i9," (",A16,")",i10," (",A6,")",i16,i16,".")', t,IFD%tag(t)%Id,tagName(IFD%tag(t)%Id),IFD%tag(t)%Typ,trim(typeName(IFD%tag(t)%Typ)),IFD%tag(t)%Cnt, IFD%tag(t)%Offset
+        print '("    Tag ",i2,":",i9," (",A22,")",i10," (",A6,")",i12,i12,".")', t,IFD%tag(t)%Id,tagName(IFD%tag(t)%Id),IFD%tag(t)%Typ,trim(typeName(IFD%tag(t)%Typ)),IFD%tag(t)%Cnt, IFD%tag(t)%Offset
      enddo
      tiff%n_tags=tiff%n_tags+IFD%n_tags
 
@@ -247,12 +312,65 @@ subroutine TIFF_read_IFDs(tiff)
 
 end subroutine
 
+! Read GeoTIFF directory ===========================================
+subroutine GTIFF_read_GeoDir(tiff)
+      implicit none
+      type(TIFF_FILE),intent(inout) :: tiff
+      integer         :: gDirOffset, k,typ,cnt
+      logical         :: found
+      integer(kind=1) :: Head(8), key(8)
+
+      print '("   GeoTIFF Keys Directory (geoDir): ",I6)'
+      ! set record number
+      call get_tag_parameters(tiff,GTIFF_geoKeyDirectoryTag,typ,cnt,gDirOffset,found)
+      read(unit=tiff%iUnit, rec=gDirOffset+1) Head(1)  ! version  - read but not used
+      read(unit=tiff%iUnit, rec=gDirOffset+2) Head(2)  ! version  - read but not used
+      read(unit=tiff%iUnit, rec=gDirOffset+3) Head(3)  ! revision - read but not used
+      read(unit=tiff%iUnit, rec=gDirOffset+4) Head(4)  ! revision - read but not used
+      read(unit=tiff%iUnit, rec=gDirOffset+5) Head(5)  ! minor revision - read but not used
+      read(unit=tiff%iUnit, rec=gDirOffset+6) Head(6)  ! minor revision - read but not used
+      read(unit=tiff%iUnit, rec=gDirOffset+7) Head(7)  ! number of GeoKeys (1)
+      read(unit=tiff%iUnit, rec=gDirOffset+8) Head(8)  ! number of GeoKeys (2)
+      tiff%gDir%nkeys = transfer( [head(1), head(2)], tiff%gDir%version       )
+      tiff%gDir%nkeys = transfer( [head(3), head(4)], tiff%gDir%revision      )
+      tiff%gDir%nkeys = transfer( [head(5), head(6)], tiff%gDir%minor_revision)
+      tiff%gDir%nkeys = transfer( [head(7), head(8)], tiff%gDir%nKeys         )
+      allocate(tiff%gDir%key(tiff%gDir%nKeys))
+      print '("version: ",I2, "revision: ",I2," minor-revision: ",I2," # keys: ",I2)',tiff%gDir%version, tiff%gDir%revision,tiff%gDir%minor_revision,tiff%gDir%nKeys
+      print '("    # of Keys in gDir: ",I6)', tiff%gDir%nKeys
+      do k=1,tiff%gDir%nkeys
+         read(unit=tiff%iUnit, rec=gDirOffset+8+(k-1)*8+1) Key(1) !id
+         read(unit=tiff%iUnit, rec=gDirOffset+8+(k-1)*8+2) Key(2) !id
+         read(unit=tiff%iUnit, rec=gDirOffset+8+(k-1)*8+3) Key(3) !tiffTagLocation (kind)
+         read(unit=tiff%iUnit, rec=gDirOffset+8+(k-1)*8+4) Key(4) !tiffTagLocation (kind)
+         read(unit=tiff%iUnit, rec=gDirOffset+8+(k-1)*8+5) Key(5) !count
+         read(unit=tiff%iUnit, rec=gDirOffset+8+(k-1)*8+6) Key(6) !count
+         read(unit=tiff%iUnit, rec=gDirOffset+8+(k-1)*8+7) Key(7) !offset/value
+         read(unit=tiff%iUnit, rec=gDirOffset+8+(k-1)*8+8) Key(8) !offset/value
+
+         tiff%gDir%key(k)%id    = transfer([ key(1),key(2) ],   tiff%gDir%key(k)%id    ) 
+         tiff%gDir%key(k)%typ   = transfer([ key(3),key(4) ],   tiff%gDir%key(k)%typ   )
+         tiff%gDir%key(k)%cnt   = transfer([ key(5),key(6) ],   tiff%gDir%key(k)%cnt   )
+         tiff%gDir%key(k)%offset= transfer([ key(7),key(8) ],   tiff%gDir%key(k)%offset)
+
+         if ( tiff%gDir%key(k)%Id     < 0 )  tiff%gDir%key(k)%Id    = tiff%gDir%key(k)%Id     +  intAdj4
+         if ( tiff%gDir%key(k)%Cnt    < 0 )  tiff%gDir%key(k)%Cnt   = tiff%gDir%key(k)%Cnt    +  intAdj4
+         if ( tiff%gDir%key(k)%Offset < 0 )  tiff%gDir%key(k)%Offset= tiff%gDir%key(k)%Offset +  intAdj4
+
+         print '("    Key ",i2,":",i9," (",A22,")",i10," (",A6,")", i12,i12,".")',k, &
+                           tiff%gDir%key(k)%Id,                                      &
+                           keyName(tiff%gDir%key(k)%Id),                             &
+                           tiff%gDir%key(k)%Typ,                                     &
+                           keyTypeName(tiff%gDir%key(k)%Typ),                        &
+                           int(tiff%gDir%key(k)%Cnt),                                     &
+                           tiff%gDir%key(k)%Offset       
+
+      enddo
+
+end subroutine
 
 
-
-
-!=== TIFF_GET_FIELD  ====================
-
+!=== TIFF_GET_TAG_VALUE  ====================
 subroutine get_field_single_int(tiff,tagId,val)
    implicit none
    type(TIFF_FILE), intent(in)     :: tiff
@@ -285,8 +403,8 @@ subroutine get_field_array_int(tiff,tagId,values)  !for INTEGERs
    integer(kind=1), allocatable    :: values_1(:)
    integer :: c
    call get_tag_parameters(tiff,tagId,typ,cnt,off,found)
-   siz=typeSize(typ)
    if (found) then
+   siz=typeSize(typ)
       if ( cnt * siz  <= 4 ) then  !if value size (cnt*size) <= 4-bytes, then offset is the value
          values=off
       else
@@ -314,8 +432,8 @@ subroutine get_field_array_float(tiff,tagId,values)  !for REAL (float)
    integer(kind=1), allocatable    :: values_1(:)
    integer :: c
    call get_tag_parameters(tiff,tagId,typ,cnt,off,found)
-   siz=typeSize(typ)
    if (found) then
+   siz=typeSize(typ)
       if ( cnt * siz  <= 4 ) then  !if value size (cnt*size) <= 4-bytes, then offset is the value
          values=real(off)
       else
@@ -339,8 +457,8 @@ subroutine get_field_array_char(tiff,tagId,values)  !for REAL (float)
    integer(kind=1), allocatable    :: values_1(:)
    integer :: c
    call get_tag_parameters(tiff,tagId,typ,cnt,off,found)
-   siz=typeSize(typ)
    if (found) then
+   siz=typeSize(typ)
       if ( cnt * siz  <= 4 ) then  !if value size (cnt*size) <= 4-bytes, then offset is the value
          values=char(off)
       else
@@ -373,7 +491,7 @@ subroutine get_tag_parameters(tiff,tagId,typ,cnt,off,found)
           endif
       enddo
    enddo
-   if (.not. found) print '("Error: TagId not found:",I5)',tagId
+   if (.not. found) print '("Error: TagId not found:",I5," (",A,")")',tagId,trim(tagName(tagId))
 
 end subroutine
 
@@ -387,91 +505,156 @@ subroutine get_field_as_byte_array(tiff,offset,values_1)!,siz,cnt
         read(unit=tiff%iUnit, rec=offset+1+i-1 ) values_1(i)
   enddo
 end subroutine
-!=== END TIFF_GET_FIELD =============
+!=== END TIFF_GET_TAG_VALUE =============
 
  
 
 !MISC Functions =====================
 logical function gotTag(tiff,tagId)
- implicit none
- type(TIFF_FILE), intent(in) ::tiff
- integer        , intent(in) ::tagId
- integer :: i,t
- gotTag=.false.
- do i=1,tiff%n_imgs
-    do t=1,tiff%IFD(i)%n_tags
-        if ( tiff%IFD(i)%tag(t)%Id == tagId ) then
-           gotTag=.true.
-           return
-        endif
-    enddo
- enddo
+   implicit none
+   type(TIFF_FILE), intent(in) ::tiff
+   integer        , intent(in) ::tagId
+   integer :: i,t
+   gotTag=.false.
+   do i=1,tiff%n_imgs
+      do t=1,tiff%IFD(i)%n_tags
+          if ( tiff%IFD(i)%tag(t)%Id == tagId ) then
+             gotTag=.true.
+             return
+          endif
+      enddo
+   enddo
 end function
 
 
-
-
-! END MISC Functions =================
-
-
-
-!subroutine GeoTIFF_read_GeoDir()
-!
-!endsubroutine
-
-function tagName(tagId)
+character(len=22) function tagName(tagId)
   implicit none
   integer,intent(in) :: tagId
-  character(len=20)  :: tagName
   select case (tagId)
-     case (256 )  ;tagName='ImageWidth       '
-     case (257 )  ;tagName='ImageLength      '
-     case (258 )  ;tagName='BitsPerSample    '
-     case (259 )  ;tagName='Compression      '
-     case (262 )  ;tagName='PhotometricInt   '
-     case (263 )  ;tagName='Threshholding    '
-     case (264 )  ;tagName='CellWidth        '
-     case (265 )  ;tagName='CellLength       '
-     case (266 )  ;tagName='FillOrder        '
-     case (270 )  ;tagName='ImageDescription '
-     case (271 )  ;tagName='Make             '
-     case (272 )  ;tagName='Model            '
-     case (273 )  ;tagName='StripOffsets     '
-     case (274 )  ;tagName='Orientation      '
-     case (277 )  ;tagName='SamplesPerPixel  '
-     case (278 )  ;tagName='RowsPerStrip     '
-     case (279 )  ;tagName='StripByteCounts  '
-     case (280 )  ;tagName='MinSampleValue   '
-     case (281 )  ;tagName='MaxSampleValue   '
-     case (282 )  ;tagName='XResolution      '
-     case (283 )  ;tagName='YResolution      '
-     case (284 )  ;tagName='PlanarConfig     ' !PlanarConfiguration
-     case (306 )  ;tagName='DateTime         '
-     case (322 )  ;tagName='TileWidth        '
-     case (323 )  ;tagName='TileLength       '
-     case (324 )  ;tagName='TileOffsets      '
-     case (339 )  ;tagName='SampleFormat     '
-     case (3355)  ;tagName='ModelPixelScale  '
-     case (3392)  ;tagName='ModelTiePoint    '
-     case (1024)  ;tagName='GTModelType      '
-     case (1025)  ;tagName='GTRasterType     '
-     case (2048)  ;tagName='GeographicType   '
-     case (2050)  ;tagName='GeogGeodeticDatum'
-     case (2056)  ;tagName='GeogEllipsoid    '
-     case (3072)  ;tagName='ProjectedCSType  '
-     case (3075)  ;tagName='ProjCoordTrans   '
-     case (3076)  ;tagName='ProjLinearUnits  '
-     case (3078)  ;tagName='ProjStdParallel1 '
-     case (3079)  ;tagName='ProjStdParallel2 '
-     case (3080)  ;tagName='ProjNatOriginLong'
-     case (3081)  ;tagName='ProjNatOriginLat '
-     case (3082)  ;tagName='ProjFalseEasting '
-     case (3083)  ;tagName='ProjFalseNorthing'
-     case (3088)  ;tagName='ProjCenterLong   '
-     case (3089)  ;tagName='ProjCenterLat    '
-     case default ;tagName='Not Recognized   '
+     case(256 )   ;tagName='ImageWidth            '
+     case(257 )   ;tagName='ImageLength           '
+     case(258 )   ;tagName='BitsPerSample         '
+     case(259 )   ;tagName='Compression           '
+     case(262 )   ;tagName='PhotometricInt        '
+     case(263 )   ;tagName='Threshholding         '
+     case(264 )   ;tagName='CellWidth             '
+     case(265 )   ;tagName='CellLength            '
+     case(266 )   ;tagName='FillOrder             '
+     case(270 )   ;tagName='ImageDescription      '
+     case(271 )   ;tagName='Make                  '
+     case(272 )   ;tagName='Model                 '
+     case(273 )   ;tagName='StripOffsets          '
+     case(274 )   ;tagName='Orientation           '
+     case(277 )   ;tagName='SamplesPerPixel       '
+     case(278 )   ;tagName='RowsPerStrip          '
+     case(279 )   ;tagName='StripByteCounts       '
+     case(280 )   ;tagName='MinSampleValue        '
+     case(281 )   ;tagName='MaxSampleValue        '
+     case(282 )   ;tagName='XResolution           '
+     case(283 )   ;tagName='YResolution           '
+     case(284 )   ;tagName='PlanarConfig          ' !PlanarConfiguration
+     case(306 )   ;tagName='DateTime              '
+     case(322 )   ;tagName='TileWidth             '
+     case(323 )   ;tagName='TileLength            '
+     case(324 )   ;tagName='TileOffsets           '
+     case(339 )   ;tagName='SampleFormat          '
+     case(3355)   ;tagName='ModelPixelScale       '
+     case(3392)   ;tagName='ModelTiePoint         '
+     case(34735)  ;tagName='GeoKeyDirectoryTag    ' !GeoTiff-tag
+     case(34736)  ;tagName='GeoDoubleParamsTag    ' !GeoTiff-tag
+     case(34737)  ;tagName='GeoAsciiParamsTag     ' !GeoTiff-tag
+     case(33550)  ;tagName='ModelPixelScaleTag    ' !GeoTiff-tag
+     case(33922)  ;tagName='ModelTiepointTag      ' !GeoTiff-tag
+     case(34264)  ;tagName='ModelTransformationTag' !GeoTiff-tag
+     case default ;tagName='Not Recognized        '
   end select
 end function
+
+character(len=22) function keyName(keyId)
+  implicit none
+  integer,intent(in) :: keyId
+  select case (keyId)
+     !GeoTiff-tag
+     case(34735); keyName='GeoKeyDirectoryTag       '
+     case(34736); keyName='GeoDoubleParamsTag       ' 
+     case(34737); keyName='GeoAsciiParamsTag        ' 
+     case(33550); keyName='ModelPixelScaleTag       ' 
+     case(33922); keyName='ModelTiepointTag         ' 
+     case(34264); keyName='ModelTransformationTag   ' 
+     !Config Keys:
+     case (1024); keyName= 'GTModelType             '
+     case (1025); keyName= 'GTRasterType            ' 
+     case (1026); keyName= 'GTCitation              ' 
+     !Geodetic CRS Params:
+     case (2048); keyName= 'GeographicType          ' 
+     case (2049); keyName= 'GeogCitation            '
+     case (2050); keyName= 'GeogGeodeticDatum       '
+     case (2051); keyName= 'GeogPrimeMeridian       '
+     case (2052); keyName= 'GeogLinearUnits         '
+     case (2053); keyName= 'GeogLinearUnitSize      '
+     case (2054); keyName= 'GeogAngularUnits        '
+     case (2055); keyName= 'GeogAngularUnitSize     '
+     case (2056); keyName= 'GeogEllipsoid           '
+     case (2057); keyName= 'GeogSemiMajorAxis       '
+     case (2058); keyName= 'GeogSemiMinorAxis       '
+     case (2059); keyName= 'GeogInvFlattening       '
+     case (2060); keyName= 'GeogAzimuthUnits        '
+     case (2061); keyName= 'GeogPrimeMeridianLong   '
+     !Projected CRS Params: 
+     case (3072); keyName= 'ProjectedCSType         ' !EPSG CODE!
+     case (3073); keyName= 'PCSCitation             '
+     case (3074); keyName= 'Projection              '
+     case (3075); keyName= 'ProjCoordTrans          ' 
+     case (3076); keyName= 'ProjLinearUnits         '
+     case (3077); keyName= 'ProjLinearUnitSize      ' 
+     case (3078); keyName= 'ProjStdParallel1        ' 
+     case (3079); keyName= 'ProjStdParallel2        ' 
+     case (3080); keyName= 'ProjNatOriginLong       ' 
+     case (3081); keyName= 'ProjNatOriginLat        ' 
+     case (3082); keyName= 'ProjFalseEasting        ' 
+     case (3083); keyName= 'ProjFalseNorthing       ' 
+     case (3084); keyName= 'ProjFalseOriginLong     ' 
+     case (3085); keyName= 'ProjFalseOriginLat      ' 
+     case (3086); keyName= 'ProjFalseOriginEasting  ' 
+     case (3087); keyName= 'ProjFalseOriginNorthing '
+     case (3088); keyName= 'ProjCenterLong          '
+     case (3089); keyName= 'ProjCenterLat           '
+     case (3090); keyName= 'ProjCenterEasting       '
+     case (3091); keyName= 'ProjCenterNorthing      '
+     case (3092); keyName= 'ProjScaleAtNatOrigin    '
+     case (3093); keyName= 'ProjScaleAtCenter       '
+     case (3094); keyName= 'ProjAzimuthAngle        '
+     case (3095); keyName= 'ProjStraightVertPoleLong'
+     case (4096); keyName= 'VerticalCSType          '  !Vertical CRS Params:
+     case (4097); keyName= 'VerticalCitation        '
+     case (4098); keyName= 'VerticalDatum           '
+     case (4099); keyName= 'VerticalUnits           '
+     case default ;keyName='Not recognized geoKey   '
+  end select
+end function
+
+character(6) function keyTypeName(keyType)
+  implicit none
+  integer,intent(in) :: keyType
+  select case (keyType)
+     case (0    ) ; keyTypeName= 'short '
+     case (34736) ; keyTypeName= 'double'
+     case (34737) ; keyTypeName= 'ascii '
+     case default; 
+  end select
+end function
+
+integer function keyTypeSize(keyType)
+  implicit none
+  integer,intent(in) :: keyType
+  select case (keyType)
+     case (0    ) ; keyTypeSize= 2
+     case (34736) ; keyTypeSize= 8
+     case (34737) ; keyTypeSize= 1
+     case default; 
+  end select
+end function
+
 
 function cpuEnd()
    ! Determines the endian-ess of the CPU
@@ -487,6 +670,8 @@ function cpuEnd()
    end if
    return
 end function  
+
+! END MISC Functions =================
 
 
 
@@ -504,19 +689,19 @@ end function
 
       bytesPerSample=tiff%bitsPerSample/8
 
-      call TIFF_GET_FIELD(tiff, TIFF_ImageWidth     ,wid )
-      call TIFF_GET_FIELD(tiff, TIFF_ImageLength    ,len )
+      call TIFF_GET_TAG_VALUE(tiff, TIFF_ImageWidth     ,wid )
+      call TIFF_GET_TAG_VALUE(tiff, TIFF_ImageLength    ,len )
       !allocate(img_i(size(img)))
       allocate(value_1(bytesPerSample))
       
       SELECT CASE(tiff%ImgType)
        CASE("strip")
-           call TIFF_GET_FIELD(tiff, TIFF_RowsPerStrip   ,rps )
+           call TIFF_GET_TAG_VALUE(tiff, TIFF_RowsPerStrip   ,rps )
            nstrips=floor(real((len+rps-1)/rps))
            allocate(StripOffsets    (nstrips))
            allocate(StripsByteCounts(nstrips))
-           call TIFF_GET_FIELD(tiff, TIFF_StripOffsets   ,StripOffsets   )
-           call TIFF_GET_FIELD(tiff, TIFF_StripByteCounts,StripsByteCounts)
+           call TIFF_GET_TAG_VALUE(tiff, TIFF_StripOffsets   ,StripOffsets   )
+           call TIFF_GET_TAG_VALUE(tiff, TIFF_StripByteCounts,StripsByteCounts)
            e=0
            do i=1,size(stripOffsets)
               do j=1,rps
@@ -528,15 +713,32 @@ end function
                  if ( e >= wid*len ) cycle 
                  e=e+1
                  img(e)   = transfer( value_1, img(1)   )
-                 print*, recNum,e,int(img(e) )
+                 !print*, recNum,e,int(img(e) )
                 enddo
               enddo
            enddo
    
        CASE("tile")
+        ! loop over offsets array
+        !TOffsets: DO idos=1_8, size(vars%dataOS)
+
+        !  ! compute number of current tile, tile row, tile col
+        !  ! first row in tile, first col in tile
+        !  tileNum = tileNum+1_8
+        !  tileRow = int((tileNum-1_8)/tilesAcross)+1_8
+        !  tileCol = mod(tileNum-1_8,tilesAcross)+1_8
+        !  tileFirstRow = ((tileRow-1_8)*vars%tileLen)+1_8
+        !  tileFirstCol = ((tileCol-1_8)*vars%tileWid)+1_8
+
+        !  ! compute current data row, decrement by 1 since incremented at 
+        !  ! beginning of loop below
+        !  tmprow = tileFirstRow-1_8
+
+        !  ! loop over rows in tile
+        !  TRowLoop: DO jrow=1_8, vars%tileLen
+  
    
-   
-         !       END DO TColLoop ! tileWid, cols
+        !!       END DO TColLoop ! tileWid, cols
          !   END DO TRowLoop ! tileLen, rows
          !END DO TOffsets ! tile offsets         
    
@@ -544,4 +746,14 @@ end function
     
    end subroutine TIFF_GET_IMAGE
   !=== END TIFF_GET_IMAGE =============
+
+
+
+
+!=============================================================== 
+
+
+
+
+
 end module  
