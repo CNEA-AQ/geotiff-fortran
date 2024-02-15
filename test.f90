@@ -8,8 +8,10 @@ program test_tiff
 
   integer              :: wid,len,bps,rps
   integer, allocatable :: sof(:),sbc(:)
-  character(100)       :: words=''
+  character(100)       :: words='', citation=''
   real,allocatable     :: image(:)
+  real    :: par1,par2,par3,par4
+  integer :: i1,i2,i3,i4,i5
 
   !netcdf
   integer :: ncid,x_dim_id,y_dim_id,var_id
@@ -43,12 +45,30 @@ program test_tiff
        print*, "Tiff type: ",my_tiff%ImgType
        print*,"---"
 
+       call debug_print_tiff_content(my_tiff)
+
        ![ ] TIFF_GET_IMG_VALUES(tiff,   img(i,:,:))
        allocate(image(wid*len))
        call TIFF_GET_IMAGE(my_tiff,  image )
 
        !GeoTIFF procedures:
-       !call GTIFF_GET_KEY_VALUE()
+       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_GTCitation       , citation)
+       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjStdParallel1 , par1    )
+       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjNatOriginLong, par2    )
+       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjFalseEasting , par3    )
+       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjFalseNorthing, par4    )
+       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_GeogAngularUnits , i1      )
+       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjectedCSType  , i2      )
+       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_Projection       , i3      )
+       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjCoordTrans   , i4      )
+       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjLinearUnits  , i5      )
+       print*,"***"
+       print*,"Citaton:", citation
+       print*,"Params (double):", par1,par2,par3,par4
+       print*,"Shorts:        :", i1,i2,i3,i4,i5
+       print*,"***"
+
+      
        !call GTIFF_GET_KEY_VALUE(tiff, GKey_ProjectedCSType, proj4string)
        ![ ] GTIFF_get_PROJ(tiff, proj4string)
        ![ ] GTIFF_get_GRID(tiff, nx,ny,dx,dy,xmin,xmax,ymin,ymax)
@@ -57,7 +77,8 @@ program test_tiff
 
    call TIFF_Close(my_tiff)
 
-!DEBUG
+
+   !DEBUG
    !Crear NetCDF
    call check(nf90_create('image.nc'    , NF90_CLOBBER, ncid))
       !Defino dimensiones
@@ -71,7 +92,7 @@ program test_tiff
    call check(nf90_open('image.nc'    , nf90_write, ncid       ))
       call check(nf90_inq_varid(ncid,'image'          ,var_id)); call check(nf90_put_var(ncid, var_id,reshape(image,[wid,len]) )) 
    call check(nf90_close( ncid ))
-!DEBUG:
+   !DEBUG:
 
    else
       stop 'Failed to read TIFF file'

@@ -4,7 +4,7 @@ FC  =gfortran
 LIBS= -L/usr/lib/x86_64-linux-gnu -lnetcdf -lnetcdff -lm
 INC = -I/usr/include
 
-FCFLAGS=-O1 -ffree-line-length-none #-Wunused #-Wall#
+FCFLAGS=-O1 -ffree-line-length-none #-Wall##-Wunused #
 LDFLAGS=-O1
 
 OBJS=geotiff.o test.o
