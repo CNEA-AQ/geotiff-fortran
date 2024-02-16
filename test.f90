@@ -37,16 +37,16 @@ program test_tiff
    !call TIFF_Open(124,"files/erdas_spnad83.tif",'r', my_tiff, ierr)
    if (ierr==0) then
 
-       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_ImageWidth      , wid  )
-       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_ImageLength     , len  )
-       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_BitsPerSample   , bps  )
+       call TIFF_GET_TAG_VALUE(my_tiff, 1, TIFF_ImageWidth      , wid  )
+       call TIFF_GET_TAG_VALUE(my_tiff, 1, TIFF_ImageLength     , len  )
+       call TIFF_GET_TAG_VALUE(my_tiff, 1, TIFF_BitsPerSample   , bps  )
 
-       !call TIFF_GET_TAG_VALUE(my_tiff, TIFF_RowsPerStrip    , rps  )
+       !call TIFF_GET_TAG_VALUE(my_tiff, 1, TIFF_RowsPerStrip    , rps  )
        !allocate(sof(floor(real((len+rps-1)/rps) )))        
        !allocate(sbc(floor(real((len+rps-1)/rps) )))        
-       !call TIFF_GET_TAG_VALUE(my_tiff, TIFF_StripOffsets    , sof  )
-       !call TIFF_GET_TAG_VALUE(my_tiff, TIFF_StripByteCounts , sbc  )
-       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_ImageDescription, words)
+       !call TIFF_GET_TAG_VALUE(my_tiff, 1, TIFF_StripOffsets    , sof  )
+       !call TIFF_GET_TAG_VALUE(my_tiff, 1, TIFF_StripByteCounts , sbc  )
+       call TIFF_GET_TAG_VALUE(my_tiff,  1, TIFF_ImageDescription, words)
 
        print*,"---"
        print '("wid:",i5,". len:",i5,". bps:",i3,". rps:",i5)',wid,len,bps,rps
@@ -60,19 +60,19 @@ program test_tiff
 
        ![ ] TIFF_GET_IMG_VALUES(tiff,   img(i,:,:))
        allocate(image(wid*len))
-       call TIFF_GET_IMAGE(my_tiff,  image )
+       call TIFF_GET_IMAGE(my_tiff, 1, image )
 
        !GeoTIFF procedures:
-       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_GTCitation       , citation)
-       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjStdParallel1 , par1    )
-       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjNatOriginLong, par2    )
-       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjFalseEasting , par3    )
-       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjFalseNorthing, par4    )
-       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_GeogAngularUnits , i1      )
-       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjectedCSType  , i2      )
-       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_Projection       , i3      )
-       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjCoordTrans   , i4      )
-       call GTIFF_GET_KEY_VALUE(my_tiff,  GKEY_ProjLinearUnits  , i5      )
+       call GTIFF_GET_KEY_VALUE(my_tiff, GKEY_GTCitation       , citation)
+       call GTIFF_GET_KEY_VALUE(my_tiff, GKEY_ProjStdParallel1 , par1    )
+       call GTIFF_GET_KEY_VALUE(my_tiff, GKEY_ProjNatOriginLong, par2    )
+       call GTIFF_GET_KEY_VALUE(my_tiff, GKEY_ProjFalseEasting , par3    )
+       call GTIFF_GET_KEY_VALUE(my_tiff, GKEY_ProjFalseNorthing, par4    )
+       call GTIFF_GET_KEY_VALUE(my_tiff, GKEY_GeogAngularUnits , i1      )
+       call GTIFF_GET_KEY_VALUE(my_tiff, GKEY_ProjectedCSType  , i2      )
+       call GTIFF_GET_KEY_VALUE(my_tiff, GKEY_Projection       , i3      )
+       call GTIFF_GET_KEY_VALUE(my_tiff, GKEY_ProjCoordTrans   , i4      )
+       call GTIFF_GET_KEY_VALUE(my_tiff, GKEY_ProjLinearUnits  , i5      )
        print*,"***"
        print*,"Citaton:", citation
        print*,"Params (double):", par1,par2,par3,par4

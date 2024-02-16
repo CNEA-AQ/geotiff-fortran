@@ -11,15 +11,8 @@ Open/close file:
 
 Read commands:
 - [x] `TIFF_Get_Tag_Value (tiff, tagId, value)`
-- [x] `TIFF_Get_Image     (tiff, image, *n   )`
+- [x] `TIFF_Get_Image     (tiff, *nimg, image)`
 - [ ] `GTIFF_Get_Key_Value(tiff, keyId, value)`
-
-Structures/Types:
-- [ ] `TIFF_FILE`
-- [ ] `TIFF_IFD`
-- [ ] `TIFF_TAG` 
-- [ ] `GEO_DIR`
-- [ ] `GEO_KEY` 
 
 
 ## Example of use:
@@ -29,8 +22,8 @@ program my_program
    use geoTiff
    implicit none  
    type(TIFF_FILE) :: my_tiff
-   integer              :: ierr,wid,len,bps,rps
-   character(100)       :: words
+   integer              :: ierr,wid,len,bps
+   character(100)       :: descr
    real   , allocatable :: image(:)
    integer, allocatable :: sof
    
@@ -40,15 +33,11 @@ program my_program
        call TIFF_GET_TAG_VALUE(my_tiff, TIFF_ImageWidth      , wid  )
        call TIFF_GET_TAG_VALUE(my_tiff, TIFF_ImageLength     , len  )
        call TIFF_GET_TAG_VALUE(my_tiff, TIFF_BitsPerSample   , bps  )
-       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_ImageDescription, words)
-   
-       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_RowsPerStrip    , rps  )
-       allocate(sof(floor(real((len+rps-1)/rps) )))
-       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_StripOffsets    , sof  )
+       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_ImageDescription, descr)
    
        allocate(image(wid*len))
        call TIFF_GET_IMAGE(my_tiff,  image )
-   
+
       call TIFF_Close(my_tiff)
    else
       stop 'Failed to read TIFF file'
@@ -61,18 +50,22 @@ end program
 ## To-do list:
 
 General:
+- [x] GeoKey's values access (`gtiff_get_key_value`)
 - [x] Add big-Enddian support (swap byte-order)
-- [ ] Add support for 'tiles'
-- [ ] Swap-vertical order of Image-Array so [0,0] == southern-west pixel
-- [ ] Find how to get X & Y Coordinates
-- [ ] Add support for multi-image tiff
+- [~] Add support for 'tiles'
+- [~] Swap-vertical order of Image-Array so [0,0] == southern-west pixel
+- [~] Extend `TIFF_Get_Image` for categorical (integer) fields
+- [ ] Find how to get XY coordinates
+- [~] Add support for multi-image tiff
 - [ ] Add support for multi-band image tiff
 - [ ] Write/Create functions
 
 Be complaint with standards:
-- [ ] TIFF 6.0 complaint.
-- [ ] [OGC GEOTIFF 1.1](https://docs.ogc.org/is/19-008r4/19-008r4.html) complaint.
+- [ ] TIFF 6.0
+- [ ] [OGC GEOTIFF 1.1](https://docs.ogc.org/is/19-008r4/19-008r4.html)
 
 Performance:
-- [ ] Memory (RSS) and CPU usage testing.
+- [ ] Memory (RSS)
+- [ ] CPU usage testing.
+- [ ] Parallel access? is it possible?
 

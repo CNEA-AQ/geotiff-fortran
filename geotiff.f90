@@ -10,7 +10,7 @@ module GeoTIFF
   !public TIFF_FILE,TIFF_IFD,TIFF_TAG
 
   interface TIFF_GET_TAG_VALUE
-          module procedure get_field_single_int, get_field_array_int, get_field_single_float, get_field_array_float,get_field_array_char
+          module procedure get_tag_value_int, get_tag_values_int, get_tag_value_float, get_tag_values_float,get_tag_values_char
   end interface TIFF_GET_TAG_VALUE
 
   interface GTIFF_GET_KEY_VALUE
@@ -157,7 +157,6 @@ module GeoTIFF
      integer            :: n_imgs    !total number of tags, total number of ifds
      !Important extra parameters:
      logical            :: swapByte=.false.
-     integer            :: bitsPerSample, samplesPerPixel
      character(5)       :: ImgType='strip'       !'strip' / 'tile'
   end type
   !-------------------------------------------
@@ -185,18 +184,18 @@ subroutine TIFF_Open(iUnit,inpFile,action,tiff,iost)
         call TIFF_READ_IFDS(tiff)
         
         ![  ] Read GeoKeys from GeoDir
-        if ( gotTag(tiff, GTIFF_GeoKeyDirectoryTag ) ) then 
+        if ( gotTag(tiff, 1, GTIFF_GeoKeyDirectoryTag ) ) then 
             call GTIFF_READ_GDIR(tiff)
         else
             print*, "Error: Not a GeoTIFF File!"
         endif
 
-        call TIFF_GET_TAG_VALUE(tiff, TIFF_BitsPerSample  , tiff%bitsPerSample  )
-        call TIFF_GET_TAG_VALUE(tiff, TIFF_SamplesPerPixel, tiff%samplesPerPixel)
+        
+        
 
-        if      ( gotTag(tiff, TIFF_TileOffsets ) ) then 
+        if      ( gotTag(tiff,1, TIFF_TileOffsets ) ) then 
            print*, " Tiled type!"; tiff%ImgType='tile'
-        else if ( gotTag(tiff, TIFF_StripOffsets) ) then
+        else if ( gotTag(tiff, 1, TIFF_StripOffsets) ) then
            print*, " Strip type!"; tiff%ImgType='strip'
         else
            stop "Error Image type not identified!"
@@ -348,6 +347,7 @@ subroutine GTIFF_READ_GDIR(tiff)
       read(unit=tiff%iUnit, rec=gDirOffset+6) mr_1(2)  ! minor revision - read but not used
       read(unit=tiff%iUnit, rec=gDirOffset+7) nk_1(1)  ! number of GeoKeys (1)
       read(unit=tiff%iUnit, rec=gDirOffset+8) nk_1(2)  ! number of GeoKeys (2)
+
       if (tiff%swapByte) then
           tiff%gDir%version       = transfer(  v_1(2:1:-1), int(1) )
           tiff%gDir%revision      = transfer(  r_1(2:1:-1), int(1) )
@@ -395,38 +395,41 @@ end subroutine
 
 
 !=== TIFF_GET_TAG_VALUE  ====================
-subroutine get_field_single_int(tiff,tagId,val)
+subroutine get_tag_value_int(tiff,i,tagId,val)
    implicit none
    type(TIFF_FILE), intent(in)     :: tiff
+   integer        , intent(in)     :: i      !image number
    integer        , intent(in)     :: tagId
    integer        , intent(inout)  :: val
    integer                         :: tmp_arr(1)
    tmp_arr(1)=val
-   call get_field_array_int(tiff,tagId,tmp_arr)
+   call get_tag_values_int(tiff,i,tagId,tmp_arr)
    val=tmp_arr(1)
 end subroutine
 
-subroutine get_field_single_float(tiff,tagId,val)
+subroutine get_tag_value_float(tiff,i,tagId,val)
    implicit none
    type(TIFF_FILE), intent(in)     :: tiff
+   integer        , intent(in)     :: i      !image number
    integer        , intent(in)     :: tagId
    real           , intent(inout)  :: val
    real                            :: tmp_arr(1)
    tmp_arr(1)=val
-   call get_field_array_float(tiff,tagId,tmp_arr)
+   call get_tag_values_float(tiff,i,tagId,tmp_arr)
    val=tmp_arr(1)
 end subroutine
 
-subroutine get_field_array_int(tiff,tagId,values)  !for INTEGERs
+subroutine get_tag_values_int(tiff,i,tagId,values)  !for INTEGERs
    implicit none
    type(TIFF_FILE), intent(in)     :: tiff
+   integer        , intent(in)     :: i      !image number
    integer        , intent(in)     :: tagId
    integer        , intent(inout)  :: values(:)
    integer :: typ,cnt,off,siz
    logical :: found=.false.
    integer(kind=1), allocatable    :: values_1(:)
    integer :: c
-   call get_tag_parameters(tiff,1,tagId,typ,cnt,off,found)
+   call get_tag_parameters(tiff,i,tagId,typ,cnt,off,found)
    if (found) then
    siz=typeSize(typ)
       if ( cnt * siz  <= 4 ) then  !if value size (cnt*size) <= 4-bytes, then offset is the value
@@ -451,16 +454,17 @@ subroutine get_field_array_int(tiff,tagId,values)  !for INTEGERs
    endif
 end subroutine
 
-subroutine get_field_array_float(tiff,tagId,values)  !for REAL (float)
+subroutine get_tag_values_float(tiff,i,tagId,values)  !for REAL (float)
    implicit none
    type(TIFF_FILE), intent(in)     :: tiff
+   integer        , intent(in)     :: i      !image number
    integer        , intent(in)     :: tagId
    real           , intent(inout)  :: values(:)
    integer :: typ,cnt,off,siz
    logical :: found=.false.
    integer(kind=1), allocatable    :: values_1(:)
    integer :: c
-   call get_tag_parameters(tiff,1,tagId,typ,cnt,off,found)
+   call get_tag_parameters(tiff,i,tagId,typ,cnt,off,found)
    if (found) then
    siz=typeSize(typ)
       if ( cnt * siz  <= 4 ) then  !if value size (cnt*size) <= 4-bytes, then offset is the value
@@ -469,28 +473,29 @@ subroutine get_field_array_float(tiff,tagId,values)  !for REAL (float)
          allocate(values_1(siz*cnt))
          call get_field_as_byte_array(tiff,off,values_1) !,siz,cnt
          do c=1,cnt
+            !values(c)=transfer(values_1(1+(c-1)*siz:c*siz), values(1))
             if (tiff%swapByte) then
                 values(c)=transfer(values_1(c*siz:1+(c-1)*siz:-1), float(1))
             else
                 values(c)=transfer(values_1(1+(c-1)*siz:c*siz   ), float(1))
             end if
-            !values(c)=transfer(values_1(1+(c-1)*siz:c*siz), values(1))
          enddo 
          deallocate(values_1)
       endif
    endif
 end subroutine
 
-subroutine get_field_array_char(tiff,tagId,values)  !for CHARACTER
+subroutine get_tag_values_char(tiff,i,tagId,values)  !for CHARACTER
    implicit none
    type(TIFF_FILE), intent(in)     :: tiff
+   integer        , intent(in)     :: i      !image number
    integer        , intent(in)     :: tagId
    character(*)   , intent(inout)  :: values
    integer :: typ,cnt,off,siz
    logical :: found=.false.
    integer(kind=1), allocatable    :: values_1(:)
    integer :: c
-   call get_tag_parameters(tiff,1,tagId,typ,cnt,off,found)
+   call get_tag_parameters(tiff,i,tagId,typ,cnt,off,found)
    if (found) then
    siz=typeSize(typ)
       if ( cnt * siz  <= 4 ) then  !if value size (cnt*size) <= 4-bytes, then offset is the value
@@ -579,20 +584,21 @@ end subroutine
  
 
 !MISC Functions =====================
-logical function gotTag(tiff,tagId)
+logical function gotTag(tiff,i,tagId)
    implicit none
    type(TIFF_FILE), intent(in) ::tiff
    integer        , intent(in) ::tagId
-   integer :: i,t
+   integer        , intent(in) :: i
+   integer :: t
    gotTag=.false.
-   do i=1,tiff%n_imgs
+   if ( i <= tiff%n_imgs ) then
       do t=1,tiff%IFD(i)%n_tags
           if ( tiff%IFD(i)%tag(t)%Id == tagId ) then
              gotTag=.true.
              return
           endif
       enddo
-   enddo
+   endif
 end function
 
 subroutine get_tag_parameters(tiff,i,tagId,typ,cnt,off,found)
@@ -827,73 +833,101 @@ end function
 
 
 !=== TIFF_GET_IMAGE     =============
-subroutine TIFF_GET_IMAGE(tiff,img)
+subroutine TIFF_GET_IMAGE(tiff,img_num,img)
    implicit none
-   type(TIFF_FILE)     :: tiff
-   real   , intent(inout) :: img(:)
+   type(TIFF_FILE), intent(in)   :: tiff
+   integer        , intent(in)   :: img_num
+   real           , intent(inout):: img(:)
    integer :: i,j,k,b,e,recNum
    integer(kind=1), allocatable :: value_1(:)
+   integer                      :: imageWidth,imageLength,bytesPerSample,bitsPerSample
    !if strips:
-   integer, allocatable :: stripOffSets(:), stripsByteCounts(:)
-   integer              :: nstrips,rps,wid,len,bytesPerSample
+   integer, allocatable :: stripOffSets(:), stripByteCounts(:)
+   integer              :: nstrips,rps
+   !if tiles:
+   integer, allocatable :: tileOffSets(:), tileByteCounts(:)              
+   integer              :: tileWidth,tileLength, tilesAcross,tilesDown,tilesPerImage
 
-   bytesPerSample=tiff%bitsPerSample/8
-
-   call TIFF_GET_TAG_VALUE(tiff, TIFF_ImageWidth     ,wid )
-   call TIFF_GET_TAG_VALUE(tiff, TIFF_ImageLength    ,len )
+   !get some image parameters:
+   call TIFF_GET_TAG_VALUE(tiff, img_num, TIFF_ImageWidth     ,imageWidth )
+   call TIFF_GET_TAG_VALUE(tiff, img_num, TIFF_ImageLength    ,imageLength )
+   !call TIFF_GET_TAG_VALUE(tiff, 1, TIFF_SamplesPerPixel, tiff%samplesPerPixel)
+   call TIFF_GET_TAG_VALUE(tiff, 1, TIFF_BitsPerSample  , bitsPerSample      )
+   bytesPerSample=bitsPerSample/8
+ 
+   !allocate 1-sample bytes array  
    allocate(value_1(bytesPerSample))
    
    SELECT CASE(tiff%ImgType)
     CASE("strip")
-        call TIFF_GET_TAG_VALUE(tiff, TIFF_RowsPerStrip   ,rps )
-        nstrips=floor(real((len+rps-1)/rps))
+        call TIFF_GET_TAG_VALUE(tiff, img_num, TIFF_RowsPerStrip   ,rps )
+        nstrips=floor(real((imageLength+rps-1)/rps))
         allocate(StripOffsets    (nstrips))
-        allocate(StripsByteCounts(nstrips))
-        call TIFF_GET_TAG_VALUE(tiff, TIFF_StripOffsets   ,StripOffsets   )
-        call TIFF_GET_TAG_VALUE(tiff, TIFF_StripByteCounts,StripsByteCounts)
+        allocate(StripByteCounts(nstrips))
+        call TIFF_GET_TAG_VALUE(tiff, img_num, TIFF_StripOffsets   ,StripOffsets   )
+        call TIFF_GET_TAG_VALUE(tiff, img_num, TIFF_StripByteCounts,StripByteCounts)
         e=0
         do i=1,size(stripOffsets)
            do j=1,rps
-              do k=1,wid !StripsByteCounts(i),bytesPerSample
+              do k=1,imageWidth !StripByteCounts(i),bytesPerSample
                  do b=1,bytesPerSample
-                     recNum=stripOffsets(i)+1+( (j-1)*wid + (k-1) )*bytesPerSample + b
+                     recNum=stripOffsets(i)+1+( (j-1)*imageWidth + (k-1) )*bytesPerSample + b
                      read(tiff%iUnit, rec=recNum) value_1(b)
                  enddo
-              if ( e >= wid*len ) cycle 
-              e=e+1
-              if (tiff%swapByte) then
-                  img(e)   = transfer( value_1(bytesPersample:1:-1), img(1) )
-              else
-                  img(e)   = transfer( value_1                     , img(1) )
-              end if
-              !print*, recNum,e,int(img(e) )
+                 if ( e >= imageWidth*imageLength ) cycle 
+                 e=e+1
+                 if (tiff%swapByte) then
+                     img(e)   = transfer( value_1(bytesPersample:1:-1), img(1) )
+                 else
+                     img(e)   = transfer( value_1                     , img(1) )
+                 end if
              enddo
            enddo
         enddo
 
     CASE("tile")
-     ! loop over offsets array
-     !TOffsets: DO idos=1_8, size(vars%dataOS)
+       stop "ERROR: Tiled images not supported yet.."
 
-     !  ! compute number of current tile, tile row, tile col
-     !  ! first row in tile, first col in tile
-     !  tileNum = tileNum+1_8
-     !  tileRow = int((tileNum-1_8)/tilesAcross)+1_8
-     !  tileCol = mod(tileNum-1_8,tilesAcross)+1_8
-     !  tileFirstRow = ((tileRow-1_8)*vars%tileLen)+1_8
-     !  tileFirstCol = ((tileCol-1_8)*vars%tileWid)+1_8
+       call TIFF_GET_TAG_VALUE(tiff, img_num, TIFF_TileWidth      ,tileWidth    )
+       call TIFF_GET_TAG_VALUE(tiff, img_num, TIFF_TileLength     ,tileLength   )
 
-     !  ! compute current data row, decrement by 1 since incremented at 
-     !  ! beginning of loop below
-     !  tmprow = tileFirstRow-1_8
+       TilesAcross   = (ImageWidth  + TileWidth  - 1) / TileWidth  
+       TilesDown     = (ImageLength + TileLength - 1) / TileLength 
+       TilesPerImage = TilesAcross * TilesDown
 
-     !  ! loop over rows in tile
-     !  TRowLoop: DO jrow=1_8, vars%tileLen
+       allocate(TileOffsets   (tilesPerImage))
+       !allocate(TileByteCounts(tilesPerImage))
+       call TIFF_GET_TAG_VALUE(tiff, img_num, TIFF_TileOffsets    ,tileOffsets    )
+       !call TIFF_GET_TAG_VALUE(tiff, img_num, TIFF_TileByteCounts ,tileBytecounts )
 
+       e=0
+      do i=1,size(tileOffsets)
+         ! compute number of current tile, tile row, tile col
+         ! first row in tile, first col in tile
+         !tileNum = tileNum+1_8
+         !tileRow = int((tileNum-1_8)/tilesAcross)+1_8
+         !tileCol = mod(tileNum-1_8,tilesAcross)+1_8
+         !tileFirstRow = ((tileRow-1_8)*vars%tileLen)+1_8
+         !tileFirstCol = ((tileCol-1_8)*vars%tileWid)+1_8
+         
+         do j=1, tileLength  !! loop over rows in tile
+            do k=1, tileWidth
+                 do b=1,bytesPerSample
+                  !---  Compute record number (implied 1 byte per record)
+                  !thisrec =  vars%dataOS(idos) + ((((tmprow-tileFirstRow)*vars%tileWid) +   (tmpcol-tileFirstCol))* vars%bytesPerSample) + 1_8
+                  recNum=tileOffsets(i)+1+( (j-1)*tileWidth + (k-1) )*bytesPerSample + b
+                 enddo
+                 !Hay que ver como los organizo en el array img(e) de forma que queden bien..
+                 !e=e+1   
+                 !if (tiff%swapByte) then
+                 !    img(e)   = transfer( value_1(bytesPersample:1:-1), img(1) )
+                 !else
+                 !    img(e)   = transfer( value_1                     , img(1) )
+                 !end if
 
-     !!       END DO TColLoop ! tileWid, cols
-      !   END DO TRowLoop ! tileLen, rows
-      !END DO TOffsets ! tile offsets         
+            end do ! tileWid, cols
+         end do    ! tileLen, rows
+      END DO ! tile offsets         
 
    END SELECT
  
