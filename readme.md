@@ -60,14 +60,19 @@ end program
 
 ## To-do list:
 
-- [ ] Add big-Enddian support (swap byte-order)
+General:
+- [x] Add big-Enddian support (swap byte-order)
 - [ ] Add support for 'tiles'
-- [ ] Add support for multi-image tiff
-- [ ] Add support for multi-band image tiff
 - [ ] Swap-vertical order of Image-Array so [0,0] == southern-west pixel
 - [ ] Find how to get X & Y Coordinates
+- [ ] Add support for multi-image tiff
+- [ ] Add support for multi-band image tiff
 - [ ] Write/Create functions
-- [ ] Make sure to follow all TIFF 6.0 specs.
-- [ ] Make sure to follow all [OGC GEOTIFF 1.1](https://docs.ogc.org/is/19-008r4/19-008r4.html) specs.
+
+Be complaint with standards:
+- [ ] TIFF 6.0 complaint.
+- [ ] [OGC GEOTIFF 1.1](https://docs.ogc.org/is/19-008r4/19-008r4.html) complaint.
+
+Performance:
 - [ ] Memory (RSS) and CPU usage testing.
 

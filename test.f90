@@ -15,32 +15,43 @@ program test_tiff
 
   !netcdf
   integer :: ncid,x_dim_id,y_dim_id,var_id
+  character(len=100) :: file_path
+    
+  ! Check if the command line argument is provided
+  if (command_argument_count() /= 1) then
+      print*, "Usage: ./program <file_path>";stop
+  else
+      call get_command_argument(1, file_path)
+  endif
+
   !----------------------------------------
   !(1 PART) Read and extract data from TIFF:
-   !call TIFF_Open(124,"files/tire.tif",'r', my_tiff, ierr)
+   call TIFF_Open(124,trim(file_path) ,'r', my_tiff, ierr)      !TIFF little-endian
+   !call TIFF_Open(124,"files/tire.tif",'r', my_tiff, ierr)      !TIFF little-endian
+   !call TIFF_Open(124,"files/bali.tif"    ,'r', my_tiff, ierr)  !TIFF big-endian  
+   !call TIFF_Open(124,"files/balloons.tif",'r', my_tiff, ierr)  !TIFF big-endian  multiband
    !call TIFF_Open(124,"files/at3_1m4_01.tif",'r', my_tiff, ierr)
    !call TIFF_Open(124,"files/FAA_UTM18N_NAD83.tif",'r', my_tiff, ierr)  !multiband geoTiff
    !call TIFF_Open(124,"files/sinus.tif",'r', my_tiff, ierr)
-   call TIFF_Open(124,"files/cea.tif",'r', my_tiff, ierr)
+   !call TIFF_Open(124,"files/cea.tif",'r', my_tiff, ierr)
+   !call TIFF_Open(124,"files/erdas_spnad83.tif",'r', my_tiff, ierr)
    if (ierr==0) then
 
-       ![ ] TIFF_Get_FIELD(tiff   , tagId                , Value)
        call TIFF_GET_TAG_VALUE(my_tiff, TIFF_ImageWidth      , wid  )
        call TIFF_GET_TAG_VALUE(my_tiff, TIFF_ImageLength     , len  )
        call TIFF_GET_TAG_VALUE(my_tiff, TIFF_BitsPerSample   , bps  )
 
-       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_RowsPerStrip    , rps  )
-
-       allocate(sof(floor(real((len+rps-1)/rps) )))        
-       allocate(sbc(floor(real((len+rps-1)/rps) )))        
-       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_StripOffsets    , sof  )
-       call TIFF_GET_TAG_VALUE(my_tiff, TIFF_StripByteCounts , sbc  )
+       !call TIFF_GET_TAG_VALUE(my_tiff, TIFF_RowsPerStrip    , rps  )
+       !allocate(sof(floor(real((len+rps-1)/rps) )))        
+       !allocate(sbc(floor(real((len+rps-1)/rps) )))        
+       !call TIFF_GET_TAG_VALUE(my_tiff, TIFF_StripOffsets    , sof  )
+       !call TIFF_GET_TAG_VALUE(my_tiff, TIFF_StripByteCounts , sbc  )
        call TIFF_GET_TAG_VALUE(my_tiff, TIFF_ImageDescription, words)
 
        print*,"---"
        print '("wid:",i5,". len:",i5,". bps:",i3,". rps:",i5)',wid,len,bps,rps
-       print*,"sof:",sof(1:10)
-       print*,"sbc:",sbc(1:10)
+       !print*,"sof:",sof(1:10)
+       !print*,"sbc:",sbc(1:10)
        print*,"tif description:",words
        print*, "Tiff type: ",my_tiff%ImgType
        print*,"---"
